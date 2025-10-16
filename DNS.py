@@ -108,7 +108,7 @@ class DNS:
         original_offset = offset
         while True:
             length = packet[offset]
-            # אם pointer
+
             if length & 0xC0 == 0xC0:
                 pointer_offset = ((length & 0x3F) << 8) | packet[offset + 1]
                 offset = pointer_offset
