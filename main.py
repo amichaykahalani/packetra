@@ -2,12 +2,15 @@ from DNS import DNS
 from NetworkTransfer import NetworkTransfer
 
 def main():
-    domain = input('Enter domain name (ex. google.com): ')
-    dns = DNS(domain, record_type='IPv4')
-    dns_bytes = dns.serializer()
-    answer = NetworkTransfer.send_and_received(dns_bytes, '8.8.8.8', 53, protocol="UDP")
-    result = dns.deserializer(answer)
-    dns.pretty_print(result)
+    question_object = DNS("x.com", record_type="IPv4")
+    question = question_object.to_binary()
+    answer_object = DNS("x.com", is_response=True, record_type="IPv6")
+    answer_object.deserializer(NetworkTransfer.send_and_received(question,
+                                                                '8.8.8.8',
+                                                                53,
+                                                                'UDP'))
+
+    answer_object.pretty_print()
 
 if __name__ == '__main__':
     main()

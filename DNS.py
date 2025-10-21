@@ -4,24 +4,36 @@ import struct
 import random
 
 class DNS:
-    def __init__(self, domain, record_type="IPv4", class_type="IN"):
+    def __init__(self, domain, record_type="IPv4", class_type="IN", is_response= False):
+        self.is_response = is_response
+        self.raw_bytes = None
         concepts_types = {"IPv4" : 1, "Name Server" : 2, "IPv6" : 28, "ANY" : 255}
         concepts_classes = {"IN" : 1}
-        #-----------Header----------
-        self.header = {"transaction_id" : random.getrandbits(16),
-                       "flags" : 0x0100,
-                       "QDCOUNT" : 1,
-                       "ANCOUNT" : 0,
-                       "NSCOUNT" : 0,
-                       "ARCOUNT" : 0}
+        if not self.is_response:
+            #-----------Header----------
+            self.header = {"transaction_id" : random.getrandbits(16),
+                           "flags" : 0x0100,
+                           "QDCOUNT" : 1,
+                           "ANCOUNT" : 0,
+                           "NSCOUNT" : 0,
+                           "ARCOUNT" : 0}
 
-        #---------Question section-----------
-        self.question_section = {"QNAME" : domain,
-                                 "QTYPE" : concepts_types.get(record_type, concepts_types.get("IPv4")),
-                                 "QCLASS" : concepts_classes.get(class_type, concepts_classes.get("IN"))}
+            #---------Question section-----------
+            self.question_section = {"QNAME" : domain,
+                                     "QTYPE" : concepts_types.get(record_type, concepts_types.get("IPv4")),
+                                     "QCLASS" : concepts_classes.get(class_type, concepts_classes.get("IN"))}
+
+        else:
+            # -----------Header----------
+            self.header = {}
+            # ---------Question section-----------
+            self.question_section = {}
+            #---------Answer section------------
+            self.answer_section = {}
 
 
-    def serializer(self):
+
+    def to_binary(self):
         packet = struct.pack('!HHHHHH',
                           self.header["transaction_id"],
                              self.header["flags"],
@@ -35,13 +47,15 @@ class DNS:
                            self.question_section['QTYPE'],
                               self.question_section['QCLASS'])
 
+        self.raw_bytes = packet
         return packet
 
     def deserializer(self, packet):
+        self.raw_bytes = packet
         #--------header---------
         offset = 12
         transID, flags, QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT = struct.unpack('!HHHHHH', packet[:offset])
-        header = {"transaction_id" : transID,
+        self.header = {"transaction_id" : transID,
                   "flags" : flags,
                   "QDCOUNT" : QDCOUNT,
                   "ANCOUNT" : ANCOUNT,
@@ -54,7 +68,7 @@ class DNS:
         QTYPE, QCLASS = struct.unpack('!HH', packet[offset:offset + 4])
         offset += 4
 
-        question_section = {'QNAME' : QNAME,
+        self.question_section = {'QNAME' : QNAME,
                             'QTYPE' : QTYPE,
                             'QCLASS' : QCLASS}
 
@@ -80,19 +94,23 @@ class DNS:
             _, labels = DNS.parse_qname(packet, answer_offset)
             IP = '.'.join(labels)
 
+        elif TYPE == 6:
+            _, labels = DNS.parse_qname(packet, answer_offset)
+            IP = '.'.join(labels)
+
         elif TYPE == 28:
             IP = socket.inet_ntop(socket.AF_INET6, RDATA)
         else:
             IP = RDATA
 
-        answer_section = {"NAME" : NAME,
+        self.answer_section = {"NAME" : NAME,
                           "TYPE" : TYPE,
                           "CLASS" : CLASS,
                           "TTL" : TTL,
                           "RDLENGTH" : RDLENGTH,
                           "RDATA" : IP}
 
-        return header, question_section, answer_section
+        return self.header, self.question_section, self.answer_section
 
     def encode_domain(self, domain):
         parts = domain.split('.')
@@ -126,16 +144,76 @@ class DNS:
         else:
             return original_offset + 2, labels
 
-    def pretty_print(self, packet):
-        sections = {1 : "Header",
-                    2 : "Question",
-                    3 : "Answer",
-                    4 : "Authoritative",
-                    5 : "Additional", }
+    def pretty_print(self, binary=False):
+        sections = ["Header", "Question", "Answer"]
 
-        index = 1
-        for section in packet:
-            print(f"-----------{sections[index]} section-----------")
-            pprint(section)
-            print(f"-----------------------{'-' * len(sections[index] + 'section')}")
-            index += 1
+        if binary:
+            packet_dict = {}
+
+            # Header
+            packet_dict["Header"] = {
+                "transaction_id": struct.pack('!H', self.header["transaction_id"]),
+                "flags": struct.pack('!H', self.header["flags"]),
+                "QDCOUNT": struct.pack('!H', self.header["QDCOUNT"]),
+                "ANCOUNT": struct.pack('!H', self.header["ANCOUNT"]),
+                "NSCOUNT": struct.pack('!H', self.header["NSCOUNT"]),
+                "ARCOUNT": struct.pack('!H', self.header["ARCOUNT"]),
+            }
+
+            # Question
+            packet_dict["Question"] = {
+                "QNAME": self.encode_domain(self.question_section["QNAME"]),
+                "QTYPE": struct.pack('!H', self.question_section["QTYPE"]),
+                "QCLASS": struct.pack('!H', self.question_section["QCLASS"]),
+            }
+
+            # Answer (אם יש)
+            if self.is_response and self.answer_section:
+                ans = self.answer_section
+                NAME = self.encode_domain(ans["NAME"])
+                packet_dict["Answer"] = {
+                    "NAME": NAME,
+                    "TYPE": struct.pack('!H', ans["TYPE"]),
+                    "CLASS": struct.pack('!H', ans["CLASS"]),
+                    "TTL": struct.pack('!I', ans["TTL"]),
+                    "RDLENGTH": struct.pack('!H', ans["RDLENGTH"]),
+                    "RDATA": self.encode_domain(ans["RDATA"]),
+                }
+
+            if self.is_response:
+                print("Response Packet:")
+            else:
+                print("Question Packet:")
+            for sec in sections:
+                if sec in packet_dict:
+                    print(f"-----------{sec} section-----------")
+                    pprint(packet_dict[sec])
+                    print(f"----------------------" + '-' * len(sec + ' section'))
+        else:
+
+            packet = [self.header, self.question_section]
+            if self.is_response and self.answer_section:
+                packet.append(self.answer_section)
+            if self.is_response:
+                print("Response Packet:")
+            else:
+                print("Question Packet:")
+            for i, section in enumerate(packet):
+                print(f"-----------{sections[i]} section-----------")
+                pprint(section)
+                print(f"----------------------" + '-' * len(sections[i] + ' section'))
+                print()
+
+    @staticmethod
+    def return_domain_bytes(packet, offset):
+        qname_bytes = b''
+        while packet[offset] != 0x00:
+            length = packet[offset]
+            label = packet[offset + 1: offset + 1 + length]
+            qname_bytes += bytes([length]) + label
+            offset += 1 + length
+
+        qname_bytes += b'\x00'
+        offset += 1
+        return offset, qname_bytes
+

@@ -1,19 +1,30 @@
 import socket
 
 class HTTP:
-    def __init__(self, method, domain, resurce="", user_agent="example_host"):
-        self.method = method
-        self.domain = domain
-        self.resurce = resurce
-        self.user_agent = user_agent
+    def __init__(self, host, method="GET"):
+        #-------status_line-------------
+        self.status_line = f"{method.upper()} / HTTP/1.1\r\n"
 
-    def create_http_request(self):
-        request = f"{self.method} /{self.resurce} HTTP/1.1\r\nHost: {self.domain}\r\nUser-Agent: {self.user_agent}\r\n\r\nAccept: */*\r\n\r\n"
-        return request.encode()
+        #-------header------------------
+        self.host = f"Host: {host}\r\n"
+        self.user_agent = f"User-Agent: Mybrowser1.0\r\n"
+        self.accept = f"Accept: text/html\r\n\r\n"
 
-    def send_http_request(self, http_request):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((self.domain, 80))
-        sock.send(http_request)
-        response = sock.recv(1024)
-        return response
+        if method.upper() == "POST":
+            #--------body--------
+            self.data = {'username':'admin',
+                         'password':'1234'}
+
+    def serializer(self):
+        packet = self.status_line + self.host + self.user_agent + self.accept
+        return packet.encode()
+
+    @staticmethod
+    def deserializer(packet):
+        dicts = packet.decode().split("\r\n")
+        for dict in dicts:
+            print(dict)
+
+
+
+
