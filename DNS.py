@@ -1,7 +1,9 @@
 from pprint import pprint
-import socket
 import struct
 import random
+
+from NetworkTransfer import NetworkTransfer
+
 
 class DNS:
     def __init__(self, domain, record_type="IPv4", class_type="IN", is_response= False):
@@ -88,7 +90,7 @@ class DNS:
         answer_offset = offset + 10
         RDATA = packet[answer_offset:answer_offset + RDLENGTH]
         if TYPE == 1:  # A record
-            IP = socket.inet_ntop(socket.AF_INET, RDATA)
+            IP = NetworkTransfer.get_ip('AF_INET', RDATA)
 
         elif TYPE == 5:  # CNAME record
             _, labels = DNS.parse_qname(packet, answer_offset)
@@ -99,7 +101,7 @@ class DNS:
             IP = '.'.join(labels)
 
         elif TYPE == 28:
-            IP = socket.inet_ntop(socket.AF_INET6, RDATA)
+            IP = NetworkTransfer.get_ip('AF_INET6', RDATA)
         else:
             IP = RDATA
 

@@ -32,5 +32,18 @@ class NetworkTransfer:
 
         return response
 
+    @staticmethod
+    def get_ip(family, rdata):
+        try:
+            if family == 'AF_INET':
+                return socket.inet_ntop(socket.AF_INET, rdata)
+            elif family == 'AF_INET6':
+                return socket.inet_ntop(socket.AF_INET6, rdata)
+
+        except Exception as e:
+            return "Something went wrong"
+
+
+
 
 
