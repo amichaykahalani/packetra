@@ -16,5 +16,6 @@ def main():
     packet = ntp_object.to_bytes()
     answer = NetworkTransfer.send_and_received(packet, 'pool.ntp.org', 123, protocol='UDP')
     print("answer: {}".format(answer))
+
 if __name__ == '__main__':
     main()

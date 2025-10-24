@@ -1,23 +1,31 @@
 import struct
 import math
 import time
+import sys
 from decimal import Decimal, getcontext
 
 class NTP():
     def __init__(self, **kwargs):
         #-----------Header------------
         self.header = {'LI' : kwargs.get('LI', 0),
-                  'VN' : kwargs.get('LV', 4),
+                  'VN' : kwargs.get('VN', 4),
                   'mode' : kwargs.get('mode', 3),
                   'stratum' : kwargs.get('stratum', 0),
                   'poll' : kwargs.get('poll', 10),
                   'precision' : kwargs.get('precision', NTP.get_precision())}
 
-        #----------info------------
-        self.info = {'root_delay' : 0,
+        #----------Reference Parameters------------
+        self.reference_parameters = {'root_delay' : 0,
                      'Root Dispersion' : 0,
                      'Reference ID' : 0,
-                     'Reference Timestamp' : 0
+                     'Reference Timestamp': 0
+        }
+
+        #---------Timestamps--------
+        self.timestamps = {'Originate Timestamp' : 0,
+                           'Receive Timestamp' : 0,
+                           'Transmit Timestamp' : 0,
+                           'Destination Timestamp' : 0
         }
 
     def to_bytes(self):
@@ -26,22 +34,30 @@ class NTP():
         MODE = 0b011
 
         first_byte = (LI << 6) | (VN << 3) | MODE
-        header = struct.pack('!B', first_byte)
-        header += struct.pack('!2B1b',
+        header_bytes = struct.pack('!B', first_byte)
+        header_bytes += struct.pack('!2B1b',
                              self.header['stratum'],
                                 self.header['poll'],
                                 self.header['precision'])
-        #header = header.split(b'\x00')
-        #print("".join(str(num) for num in header))
-        info = struct.pack('!IIId4d',
-                           self.info['root_delay'],
-                           self.info['Root Dispersion'],
-                           self.info['Reference ID'],
-                           self.info['Reference Timestamp'],
-                           0, 0, 0, 0)
 
-        print(header + info)
-        return header + info
+        #------4 bytes------
+        reference_bytes = struct.pack('!IIId',
+                           self.reference_parameters['root_delay'],
+                           self.reference_parameters['Root Dispersion'],
+                           self.reference_parameters['Reference ID'],
+                           self.reference_parameters['Reference Timestamp'])
+
+
+        #------24 bytes------
+        timestamps_bytes = struct.pack('!3d', self.timestamps['Originate Timestamp'],
+                                       self.timestamps['Receive Timestamp'],
+                                       self.timestamps['Transmit Timestamp'])
+
+        #-----48 bytes-------
+        packet = header_bytes + reference_bytes + timestamps_bytes
+        print('packet: {}'.format(packet))
+        print(len(packet))
+        return packet
 
     @staticmethod
     def get_precision():
@@ -52,3 +68,5 @@ class NTP():
         end_decimal = Decimal(str(end_float))
         delta_d = end_decimal - start_decimal
         return int(math.log(delta_d, 2))
+
+
