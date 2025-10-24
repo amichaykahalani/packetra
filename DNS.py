@@ -6,8 +6,8 @@ from NetworkTransfer import NetworkTransfer
 
 
 class DNS:
-    def __init__(self, domain, record_type="IPv4", class_type="IN", is_response= False):
-        self.is_response = is_response
+    def __init__(self, domain, **kwargs):
+        self.is_response = kwargs.get('is_response', False)
         self.raw_bytes = None
         concepts_types = {"IPv4" : 1, "Name Server" : 2, "IPv6" : 28, "ANY" : 255}
         concepts_classes = {"IN" : 1}
@@ -22,8 +22,8 @@ class DNS:
 
             #---------Question section-----------
             self.question_section = {"QNAME" : domain,
-                                     "QTYPE" : concepts_types.get(record_type, concepts_types.get("IPv4")),
-                                     "QCLASS" : concepts_classes.get(class_type, concepts_classes.get("IN"))}
+                                     "QTYPE" : concepts_types.get(kwargs.get('record_type'), concepts_types.get("IPv4")),
+                                     "QCLASS" : concepts_classes.get(kwargs.get('class_type'), concepts_classes.get("IN"))}
 
         else:
             # -----------Header----------
