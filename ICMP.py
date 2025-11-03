@@ -1,6 +1,4 @@
 import struct
-from email import header
-
 
 class ICMP:
     def __init__(self, **kwargs):
