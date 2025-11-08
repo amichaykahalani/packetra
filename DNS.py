@@ -2,7 +2,7 @@ from pprint import pprint
 import struct
 import random
 
-from NetworkTransfer import NetworkTransfer
+from Network import Network
 
 
 class DNS:
@@ -90,7 +90,7 @@ class DNS:
         answer_offset = offset + 10
         RDATA = packet[answer_offset:answer_offset + RDLENGTH]
         if TYPE == 1:  # A record
-            IP = NetworkTransfer.get_ip('AF_INET', RDATA)
+            IP = Network.get_ip('AF_INET', RDATA)
 
         elif TYPE == 5:  # CNAME record
             _, labels = DNS.parse_qname(packet, answer_offset)
@@ -101,7 +101,7 @@ class DNS:
             IP = '.'.join(labels)
 
         elif TYPE == 28:
-            IP = NetworkTransfer.get_ip('AF_INET6', RDATA)
+            IP = Network.get_ip('AF_INET6', RDATA)
         else:
             IP = RDATA
 

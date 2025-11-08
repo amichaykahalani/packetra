@@ -1,9 +1,9 @@
 import socket
 
-class NetworkTransfer:
+class Network:
 
     def __init__(self):
-        pass
+        self.packets = []
 
     @staticmethod
     def send_and_received(data, ip, port, protocol="TCP"):
@@ -43,7 +43,12 @@ class NetworkTransfer:
         except Exception as e:
             return "Something went wrong"
 
+    def sniff(self):
+        sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
 
+        while True:
+            packet = sniffer.recvfrom(65535)
+            self.packets.append(packet)
 
 
 
