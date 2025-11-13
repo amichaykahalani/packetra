@@ -3,5 +3,9 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.12 (scapy1.0)" />
   </component>
+<<<<<<< HEAD
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12" project-jdk-type="Python SDK" />
+=======
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (scapy1.0)" project-jdk-type="Python SDK" />
+>>>>>>> 3846773ce1e7ebe7a3fb21193d33468514d033e4
 </project>

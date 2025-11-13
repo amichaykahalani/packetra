@@ -1,7 +1,6 @@
 import socket
 from Protocol import Protocol
 
-
 class Network:
 
     def __init__(self):
@@ -35,6 +34,7 @@ class Network:
             sock.close()
 
         return response
+    """
 
     @staticmethod
     def get_ip(family, rdata):
@@ -53,12 +53,9 @@ class Network:
         while True:
             packet = sniffer.recvfrom(65535)
             self.packets.append(packet)
-    """
 
     @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
-
-
         try:
             if protocol.protocol_name == 'DNS':
                 from DNS import DNS
@@ -99,25 +96,3 @@ class Network:
             sock.close()
 
         return response
-
-    @staticmethod
-    def get_ip(family, rdata):
-        try:
-            if family == 'AF_INET':
-                return socket.inet_ntop(socket.AF_INET, rdata)
-            elif family == 'AF_INET6':
-                return socket.inet_ntop(socket.AF_INET6, rdata)
-
-        except Exception as e:
-            return "Something went wrong"
-
-    def sniff(self):
-        sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-
-        while True:
-            packet = sniffer.recvfrom(65535)
-            self.packets.append(packet)
-
-if __name__ == "__main__":
-    Network.send_and_received = Network.get_ip
-    Network.get_ip = Network.get_ip

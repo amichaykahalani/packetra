@@ -2,7 +2,11 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+<<<<<<< HEAD
       <module fileurl="file://$PROJECT_DIR$/.idea/my_scapy.iml" filepath="$PROJECT_DIR$/.idea/my_scapy.iml" />
+=======
+      <module fileurl="file://$PROJECT_DIR$/.idea/scapy1.0.iml" filepath="$PROJECT_DIR$/.idea/scapy1.0.iml" />
+>>>>>>> 3846773ce1e7ebe7a3fb21193d33468514d033e4
     </modules>
   </component>
 </project>
