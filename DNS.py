@@ -3,19 +3,11 @@ import struct
 import random
 
 from Network import Network
-<<<<<<< HEAD
 from Protocol import Protocol
-
 
 class DNS(Protocol):
     def __init__(self, domain, **kwargs):
         super().__init__('DNS')
-=======
-
-
-class DNS:
-    def __init__(self, domain, **kwargs):
->>>>>>> 3846773ce1e7ebe7a3fb21193d33468514d033e4
         self.is_response = kwargs.get('is_response', False)
         self.raw_bytes = None
         concepts_types = {"IPv4" : 1, "Name Server" : 2, "IPv6" : 28, "ANY" : 255}
@@ -41,8 +33,6 @@ class DNS:
             self.question_section = {}
             #---------Answer section------------
             self.answer_section = {}
-
-
 
     def to_binary(self):
         packet = struct.pack('!HHHHHH',
@@ -121,11 +111,7 @@ class DNS:
                           "RDLENGTH" : RDLENGTH,
                           "RDATA" : IP}
 
-<<<<<<< HEAD
         return self
-=======
-        return self.header, self.question_section, self.answer_section
->>>>>>> 3846773ce1e7ebe7a3fb21193d33468514d033e4
 
     def encode_domain(self, domain):
         parts = domain.split('.')
@@ -231,7 +217,3 @@ class DNS:
         qname_bytes += b'\x00'
         offset += 1
         return offset, qname_bytes
-<<<<<<< HEAD
-=======
-
->>>>>>> 3846773ce1e7ebe7a3fb21193d33468514d033e4
