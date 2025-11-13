@@ -61,29 +61,17 @@ class Network:
                 from DNS import DNS
                 pkt = protocol.to_binary()
                 print(pkt)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.settimeout(5.0)
-                sock.connect(('8.8.8.8', 53))
-                print(f"sending data to {('8.8.8.8', 53)}")
-                sock.sendall(pkt)
-                response = sock.recv(4096)
+                response = Network.create_sock_and_send(pkt)
                 print("response:", response)
                 return DNS('www.google.com', is_response=True).deserializer(response)
 
             elif protocol.protocol_name == 'UDP':
                 from DNS import DNS
                 from UDP import UDP
-                pkt = protocol.to_binary()
-                print("type of pkt: ", type(pkt))
+                print('type of payload: ', type(protocol.payload))
+                pkt = protocol.to_binary() + protocol.payload.to_binary()
                 print("pkt: ", pkt)
-                print(f"sending data to {('UDP', 53)}")
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.settimeout(5.0)
-                sock.connect(('8.8.8.8', 53))
-                print(f"sending data to {('8.8.8.8', 53)}")
-                sock.sendall(pkt)
-                response = sock.recv(4096)
-                print("response:", response)
+                response = Network.create_sock_and_send(pkt)
                 return UDP().deserializer(response)
             else:
                 print("something went wrong, protocol not supported")
@@ -92,7 +80,16 @@ class Network:
             response = b""
             print(e)
 
-        finally:
-            sock.close()
+        return protocol
 
+    @staticmethod
+    def create_sock_and_send(pkt):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(5.0)
+        sock.connect(('8.8.8.8', 53))
+        print(f"sending data to {('8.8.8.8', 53)}")
+        sock.sendall(pkt)
+        response = sock.recv(4096)
+        print("response:", response)
+        sock.close()
         return response

@@ -3,21 +3,24 @@ import struct
 
 class UDP(Protocol):
     def __init__(self):
-        super().__init__('UDP')
-        self.src_port = 12345
-        self.dst_port = 53
-        self.checksum = 0
-        self.length = 8
+        super().__init__()
+        #------------Header------------
+        self.header = {
+            'src_port' : 12345,
+            'dst_port' : 53,
+            'checksum' : 0,
+            'length' : 0,
+        }
 
-    def to_binary(self):
+    def to_binary(self: Protocol) -> bytes:
         print("udp to binary")
-        pkt = struct.pack('!4H', self.src_port, self.dst_port, self.checksum, self.length) + self.payload.to_binary()
+        pkt = struct.pack('!4H', self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header['length'])
         return pkt
 
-    def deserialize(self, data: bytes):
-        self.src_port, self.dst_port, self.checksum, self.length, self.payload = struct.unpack('!4H', data[:8])
-        self.payload = data[8:]
+    def deserialize(self, data: bytes) -> Protocol:
+        self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header['length'] = struct.unpack('!4H', data[:8])
+        self.payload = struct.unpack(f'{self.header['length'] - 8}s', data[8:])
         return self
 
-    def __str__(self):
-        return f'{self.src_port} : {self.dst_port} : {self.checksum} : {self.length} : {self.payload}'
+    def __str__(self) -> str:
+        return f'{self.header['src_port']} : {self.header['dst_port']} : {self.header['checksum']} : {self.header['length']} : {self.payload}'
