@@ -1,8 +1,9 @@
 
 
 class Protocol:
-    def __init__(self):
+    def __init__(self, name: str):
         self.header = None
+        self.protocol_name = name
         self.payload = None
 
     def to_binary(self) -> bytes:

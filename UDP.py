@@ -3,7 +3,7 @@ import struct
 
 class UDP(Protocol):
     def __init__(self):
-        super().__init__()
+        super().__init__('UDP')
         #------------Header------------
         self.header = {
             'src_port' : 12345,

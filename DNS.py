@@ -7,7 +7,7 @@ from Protocol import Protocol
 
 class DNS(Protocol):
     def __init__(self, domain, **kwargs):
-        super().__init__()
+        super().__init__('DNS')
         self.is_response = kwargs.get('is_response', False)
         self.raw_bytes = None
         concepts_types = {"IPv4" : 1, "Name Server" : 2, "IPv6" : 28, "ANY" : 255}
