@@ -26,7 +26,7 @@ class Network:
                 print(pkt)
                 response = Network.create_sock_and_send(pkt, protocol.protocol_name)
                 print("response:", response)
-                return DNS('www.google.com', is_response=True).deserializer(response).all_sections
+                return DNS('www.google.com', is_response=True).deserializer(response)
 
             elif protocol.protocol_name == 'UDP':
                 from DNS import DNS
@@ -45,7 +45,7 @@ class Network:
                 print('protocol name: ', protocol.protocol_name)
                 response = Network.create_sock_and_send(pkt, protocol.protocol_name)
                 print("response: ", end='')
-                return IPv4().deserializer(response).header
+                return IPv4().deserializer(response)
 
             else:
                 print("something went wrong, protocol not supported")
