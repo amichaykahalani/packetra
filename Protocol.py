@@ -6,7 +6,7 @@ class Protocol:
         self.protocol_name = name
         self.payload = None
 
-    def to_binary(self) -> bytes:
+    def to_binary(self, *args) -> bytes:
         pass
 
 

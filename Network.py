@@ -6,36 +6,6 @@ class Network:
     def __init__(self):
         self.packets = []
 
-    """
-    @staticmethod
-    def send_and_received(data, ip, port, protocol="TCP"):
-        protocols = {"TCP": socket.SOCK_STREAM, "UDP": socket.SOCK_DGRAM}
-        sock_type = protocols.get(protocol.upper(), socket.SOCK_STREAM)
-
-        sock = socket.socket(socket.AF_INET, sock_type)
-        sock.settimeout(5.0)
-
-        try:
-            if sock_type == socket.SOCK_STREAM:
-                sock.connect((ip, port))
-                print(f"sending data to {(ip, port)}")
-                sock.sendall(data)
-                response = sock.recv(4096)
-
-            else:
-                sock.sendto(data, (ip, port))
-                response, _ = sock.recvfrom(4096)
-
-        except Exception as e:
-            response = b""
-            print(e)
-
-        finally:
-            sock.close()
-
-        return response
-    """
-
     @staticmethod
     def get_ip(family, rdata):
         try:
@@ -46,13 +16,6 @@ class Network:
 
         except Exception as e:
             return "Something went wrong"
-
-    def sniff(self):
-        sniffer = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
-
-        while True:
-            packet = sniffer.recvfrom(65535)
-            self.packets.append(packet)
 
     @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
@@ -73,6 +36,15 @@ class Network:
                 print("pkt: ", pkt)
                 response = Network.create_sock_and_send(pkt)
                 return UDP().deserializer(response)
+
+            elif protocol.protocol_name == 'IPv4':
+                from IPv4 import IPv4
+                print('type of payload: ', type(protocol.payload))
+                pkt = protocol.to_binary()
+                print("pkt: ", pkt)
+                response = Network.create_rawsock_and_send(pkt)
+                return IPv4().deserializer(response)
+
             else:
                 print("something went wrong, protocol not supported")
 
@@ -93,3 +65,31 @@ class Network:
         print("response:", response)
         sock.close()
         return response
+
+    @staticmethod
+    def create_rawsock_and_send(pkt):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+        sock.settimeout(5.0)
+        sock.connect(('8.8.8.8', 53))
+        print(f"sending data to {('8.8.8.8', 53)}")
+        sock.sendall(pkt)
+        response = sock.recv(4096)
+        print("response:", response)
+        sock.close()
+        return response
+
+    @staticmethod
+    def get_my_ip() -> str:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        finally:
+            s.close()
+        return ip
+
+    @staticmethod
+    def convert_ip_into_bytes(ip: str) -> bytes:
+        ip_bytes = socket.inet_aton(ip)
+        return ip_bytes

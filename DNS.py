@@ -35,6 +35,7 @@ class DNS(Protocol):
             self.answer_section = {}
 
     def to_binary(self):
+        print("---------------dns to_binary-----------------")
         packet = struct.pack('!HHHHHH',
                           self.header["transaction_id"],
                              self.header["flags"],
