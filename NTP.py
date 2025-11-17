@@ -1,8 +1,10 @@
 import struct
 import time
+from Protocol import Protocol
 
-class NTP:
+class NTP(Protocol):
     def __init__(self, **kwargs):
+        super().__init__('NTP')
         #-----------Header------------
         self.header = {'LI' : kwargs.get('LI', 0),
                   'VN' : kwargs.get('VN', 4),
@@ -25,7 +27,7 @@ class NTP:
                            'transmit_timestamp' : 0
         }
 
-    def to_bytes(self):
+    def to_binary(self):
         LI = 0b00
         VN = 0b100
         MODE = 0b011

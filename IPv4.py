@@ -43,7 +43,21 @@ class IPv4(Protocol):
         return header
 
     def deserializer(self, data) -> Protocol:
-        return IPv4()
+        ip = IPv4()
+        first_byte = struct.unpack('!B', data[:1])[0]
+        ip.header['version'] = first_byte >> 4
+        ip.header['IHL'] = first_byte & 0x0000F
+        second_byte = struct.unpack('!B', data[1:2])[0]
+        ip.header['DSCP'] = second_byte >> 6
+        ip.header['ECN'] = second_byte & 0x00000011
+        ip.header['total_length'], ip.header['identification'] = struct.unpack('!2H', data[2:6])
+        flags_and_frag_offset = struct.unpack('!H', data[6:8])[0]
+        ip.header['flags'] = flags_and_frag_offset >> 13
+        ip.header['frag_offset'] = flags_and_frag_offset & 0xFFF0111
+        ip.header['TTL'], ip.header['Protocol'], ip.header['checksum'] = struct.unpack('!2BH', data[8:12])
+        ip.header['ip_src'] = Network.convert_bytes_into_ip(data[12:16])
+        ip.header['ip_dst'] = Network.convert_bytes_into_ip(data[16:20])
+        return ip
 
     @staticmethod
     def ip_checksum(data: bytes) -> int:

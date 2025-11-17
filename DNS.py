@@ -34,8 +34,10 @@ class DNS(Protocol):
             #---------Answer section------------
             self.answer_section = {}
 
+            self.all_sections = self.header | self.question_section | self.answer_section
+
     def to_binary(self):
-        print("---------------dns to_binary-----------------")
+        print("---------------DNS to_binary-----------------")
         packet = struct.pack('!HHHHHH',
                           self.header["transaction_id"],
                              self.header["flags"],
@@ -112,6 +114,7 @@ class DNS(Protocol):
                           "RDLENGTH" : RDLENGTH,
                           "RDATA" : IP}
 
+        self.all_sections = self.header | self.question_section | self.answer_section
         return self
 
     def encode_domain(self, domain):

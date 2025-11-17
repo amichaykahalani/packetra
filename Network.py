@@ -15,7 +15,7 @@ class Network:
                 return socket.inet_ntop(socket.AF_INET6, rdata)
 
         except Exception as e:
-            return "Something went wrong"
+            return e
 
     @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
@@ -24,9 +24,9 @@ class Network:
                 from DNS import DNS
                 pkt = protocol.to_binary()
                 print(pkt)
-                response = Network.create_sock_and_send(pkt)
+                response = Network.create_sock_and_send(pkt, protocol.protocol_name)
                 print("response:", response)
-                return DNS('www.google.com', is_response=True).deserializer(response)
+                return DNS('www.google.com', is_response=True).deserializer(response).all_sections
 
             elif protocol.protocol_name == 'UDP':
                 from DNS import DNS
@@ -42,40 +42,36 @@ class Network:
                 print('type of payload: ', type(protocol.payload))
                 pkt = protocol.to_binary()
                 print("pkt: ", pkt)
-                response = Network.create_rawsock_and_send(pkt)
-                return IPv4().deserializer(response)
+                print('protocol name: ', protocol.protocol_name)
+                response = Network.create_sock_and_send(pkt, protocol.protocol_name)
+                print("response: ", end='')
+                return IPv4().deserializer(response).header
 
             else:
                 print("something went wrong, protocol not supported")
 
         except Exception as e:
-            response = b""
             print(e)
 
         return protocol
 
     @staticmethod
-    def create_sock_and_send(pkt):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(5.0)
-        sock.connect(('8.8.8.8', 53))
-        print(f"sending data to {('8.8.8.8', 53)}")
-        sock.sendall(pkt)
-        response = sock.recv(4096)
-        print("response:", response)
-        sock.close()
-        return response
+    def create_sock_and_send(pkt, protocol_name):
+        raw_socket_protocols = ['IPv4', 'IPv6']
+        udp_socket_protocols = ['DNS', 'NTP']
+        if protocol_name in raw_socket_protocols:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+        elif protocol_name in udp_socket_protocols:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    @staticmethod
-    def create_rawsock_and_send(pkt):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
         sock.settimeout(5.0)
         sock.connect(('8.8.8.8', 53))
         print(f"sending data to {('8.8.8.8', 53)}")
         sock.sendall(pkt)
         response = sock.recv(4096)
-        print("response:", response)
         sock.close()
         return response
 
@@ -91,5 +87,8 @@ class Network:
 
     @staticmethod
     def convert_ip_into_bytes(ip: str) -> bytes:
-        ip_bytes = socket.inet_aton(ip)
-        return ip_bytes
+       return socket.inet_aton(ip)
+
+    @staticmethod
+    def convert_bytes_into_ip(ip: bytes) -> str:
+        return socket.inet_ntop(socket.AF_INET, ip)

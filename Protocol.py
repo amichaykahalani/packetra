@@ -1,5 +1,3 @@
-
-
 class Protocol:
     def __init__(self, name: str):
         self.header = None
