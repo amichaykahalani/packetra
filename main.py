@@ -5,10 +5,7 @@ from UDP import UDP
 from IPv4 import IPv4
 
 def main():
-    ip = IPv4()
-    udp = UDP()
-    dns = DNS('www.google.com')
-    pkt = ip.add_protocol(udp.add_protocol(dns))
+    pkt = IPv4().add_protocol(UDP().add_protocol(DNS('www.google.com')))
     ans = Network.send_and_received(pkt)
     print(ans)
 
