@@ -34,11 +34,17 @@ class UDP(Protocol):
                                  self.header['dst_port'],
                                  self.header['length'],
                                  self.header['checksum'])
+
+
         return udp_header + payload_bin
 
-    def deserialize(self, data: bytes) -> Protocol:
+    def deserializer(self, data: bytes) -> Protocol:
+        print("---------------udp deserializer-----------------")
+        from DNS import DNS
         self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header['length'] = struct.unpack('!4H', data[:8])
-        self.payload = struct.unpack(f'{self.header['length'] - 8}s', data[8:])
+        dns_bin = data[8:self.header['length']]
+        dns = DNS(is_response=True)
+        self.payload = dns.deserializer(dns_bin)
         return self
 
     def __str__(self) -> str:

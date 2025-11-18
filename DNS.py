@@ -6,7 +6,7 @@ from Network import Network
 from Protocol import Protocol
 
 class DNS(Protocol):
-    def __init__(self, domain, **kwargs):
+    def __init__(self, domain="", **kwargs):
         super().__init__('DNS')
         self.is_response = kwargs.get('is_response', False)
         self.raw_bytes = None
@@ -55,6 +55,7 @@ class DNS(Protocol):
         return packet
 
     def deserializer(self, packet):
+        print("---------------DNS deserializer-----------------")
         self.raw_bytes = packet
         #--------header---------
         offset = 12
@@ -221,3 +222,9 @@ class DNS(Protocol):
         qname_bytes += b'\x00'
         offset += 1
         return offset, qname_bytes
+
+    def __str__(self):
+        if self.is_response and self.answer_section:
+            return f'{self.header | self.question_section | self.answer_section}'
+        else:
+            return f'{self.header | self.question_section}'

@@ -1,11 +1,13 @@
 from Network import Network
 from Protocol import Protocol
+from UDP import UDP
 import random
 import struct
 
 class IPv4(Protocol):
     def __init__(self):
         super().__init__('IPv4')
+
         self.header = {
             'version': 4,
             'IHL': 5,
@@ -32,32 +34,56 @@ class IPv4(Protocol):
         return ip_header + udp_header
 
     def build_header(self, checksum: int) -> bytes:
-        first_byte = (self.header['version'] << 4 | self.header['IHL'])
-        second_byte = (self.header['DSCP'] << 6 | self.header['ECN'])
+        first_byte = (self.header['version'] << 4) | (self.header['IHL'] & 0x0F)
+        # DSCP 6 ביט גבוהים, ECN 2 ביט נמוכים => second_byte = (DSCP << 2) | ECN
+        second_byte = ((self.header['DSCP'] & 0x3F) << 2) | (self.header['ECN'] & 0x03)
+
         header = first_byte.to_bytes(1, 'big') + second_byte.to_bytes(1, 'big')
         header += struct.pack('!2H', self.header['total_length'], self.header['identification'])
-        header += (self.header['flags'] << 13 | self.header['frag_offset']).to_bytes(2, 'big')
+        header += ((self.header['flags'] & 0x7) << 13 | (self.header['frag_offset'] & 0x1FFF)).to_bytes(2, 'big')
         header += struct.pack('!2BH', self.header['TTL'], self.header['Protocol'], checksum)
         header += Network.convert_ip_into_bytes(self.header['src_ip'])
         header += Network.convert_ip_into_bytes(self.header['dst_ip'])
         return header
 
     def deserializer(self, data) -> Protocol:
-        ip = IPv4()
-        first_byte = struct.unpack('!B', data[:1])[0]
-        ip.header['version'] = first_byte >> 4
-        ip.header['IHL'] = first_byte & 0x0000F
-        second_byte = struct.unpack('!B', data[1:2])[0]
-        ip.header['DSCP'] = second_byte >> 6
-        ip.header['ECN'] = second_byte & 0x00000011
-        ip.header['total_length'], ip.header['identification'] = struct.unpack('!2H', data[2:6])
+        print("---------------IPv4 deserializer-----------------")
+        if len(data) < 20:
+            raise ValueError("IPv4 packet too short")
+
+        first_byte = data[0]
+        self.header['version'] = first_byte >> 4
+        self.header['IHL'] = first_byte & 0x0F
+
+        second_byte = data[1]
+        self.header['DSCP'] = second_byte >> 2
+        self.header['ECN'] = second_byte & 0x03
+        self.header['total_length'], self.header['identification'] = struct.unpack('!2H', data[2:6])
         flags_and_frag_offset = struct.unpack('!H', data[6:8])[0]
-        ip.header['flags'] = flags_and_frag_offset >> 13
-        ip.header['frag_offset'] = flags_and_frag_offset & 0xFFF0111
-        ip.header['TTL'], ip.header['Protocol'], ip.header['checksum'] = struct.unpack('!2BH', data[8:12])
-        ip.header['ip_src'] = Network.convert_bytes_into_ip(data[12:16])
-        ip.header['ip_dst'] = Network.convert_bytes_into_ip(data[16:20])
-        return ip
+        self.header['flags'] = flags_and_frag_offset >> 13
+        self.header['frag_offset'] = flags_and_frag_offset & 0x1FFF
+        self.header['TTL'], self.header['Protocol'], self.header['checksum'] = struct.unpack('!2BH', data[8:12])
+
+        self.header['src_ip'] = Network.convert_bytes_into_ip(data[12:16])
+        self.header['dst_ip'] = Network.convert_bytes_into_ip(data[16:20])
+
+        ihl_bytes = self.header['IHL'] * 4
+        total_len = self.header['total_length']
+        if total_len < ihl_bytes:
+            raise ValueError("Invalid total_length smaller than header length")
+
+        end = min(len(data), total_len)
+        payload_data = data[ihl_bytes:end]
+
+        if self.header['Protocol'] == 17:  # UDP
+            from UDP import UDP
+            # ודא ש־UDP.deserializer מחזיר מופע של UDP
+            udp_obj = UDP().deserializer(payload_data)
+            self.payload = udp_obj
+        else:
+            self.payload = payload_data
+
+        return self
 
     @staticmethod
     def ip_checksum(data: bytes) -> int:
@@ -67,4 +93,7 @@ class IPv4(Protocol):
         s = sum(struct.unpack(f"!{len(data) // 2}H", data))
         s = (s & 0xffff) + (s >> 16)
         return ~s & 0xffff
+
+    def __str__(self):
+        return f"""IP({self.header})\nUDP({self.payload.header})\nDNS({self.payload.payload}) """
 

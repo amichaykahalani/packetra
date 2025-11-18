@@ -19,6 +19,7 @@ class Network:
 
     @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
+        print("protocol: ", protocol.protocol_name)
         try:
             if protocol.protocol_name == 'DNS':
                 from DNS import DNS
@@ -34,7 +35,8 @@ class Network:
                 print('type of payload: ', type(protocol.payload))
                 pkt = protocol.to_binary() + protocol.payload.to_binary()
                 print("pkt: ", pkt)
-                response = Network.create_sock_and_send(pkt)
+                response = Network.create_sock_and_send(pkt, protocol.protocol_name)
+                print("response: ", response)
                 return UDP().deserializer(response)
 
             elif protocol.protocol_name == 'IPv4':
@@ -44,8 +46,7 @@ class Network:
                 print("pkt: ", pkt)
                 print('protocol name: ', protocol.protocol_name)
                 response = Network.create_sock_and_send(pkt, protocol.protocol_name)
-                print("response: ", end='')
-                return IPv4().deserializer(response)
+                return protocol.deserializer(response)
 
             else:
                 print("something went wrong, protocol not supported")
@@ -53,6 +54,7 @@ class Network:
         except Exception as e:
             print(e)
 
+        print("return protocol")
         return protocol
 
     @staticmethod
@@ -68,10 +70,10 @@ class Network:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         sock.settimeout(5.0)
-        sock.connect(('8.8.8.8', 53))
-        print(f"sending data to {('8.8.8.8', 53)}")
-        sock.sendall(pkt)
-        response = sock.recv(4096)
+        print(f"sending data {pkt}")
+        sock.sendto(pkt, ("8.8.8.8", 53))
+        response, addr = sock.recvfrom(4096)
+        print(f"received {response}")
         sock.close()
         return response
 
