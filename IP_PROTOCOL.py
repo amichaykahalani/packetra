@@ -1,32 +1,35 @@
-from Network import Network
-from Protocol import Protocol
-from UDP import UDP
+from NetworkHandler import Network
+from BaseProtocol import Protocol
 import random
 import struct
+from typing import Dict
 
-class IPv4(Protocol):
-    def __init__(self, **kwargs):
-        super().__init__('IPv4')
 
-        self.header = {
-            'version': 4,
-            'IHL': 5,
-            'DSCP': 0,
-            'ECN': 0,
-            'total_length': 20 + 8,
-            'identification': random.randint(0, 65535),
-            'flags':0,
-            'frag_offset': 0,
-            'TTL' : 64,
-            'Protocol': 17,
-            'checksum': 0,
-            'src_ip' : Network.get_my_ip(),
-            'dst_ip' : kwargs.get("dst_ip", "8.8.8.8"),
-        }
+# noinspection PyTypeChecker
+class IP(Protocol):
+    def __init__(self, protocol_type=4, **kwargs):
+        super().__init__('IP')
+        self.type = protocol_type
+        if protocol_type == 4:
+            self.header: Dict[str, int or str] = {
+                'version' : 4,
+                'IHL': 5,
+                'DSCP': 0,
+                'ECN': 0,
+                'total_length': 20 + 8,
+                'identification': random.randint(0, 65535),
+                'flags':0,
+                'frag_offset': 0,
+                'TTL' : 64,
+                'Protocol': 17,
+                'checksum': 0,
+                'src_ip' : Network.get_my_ip(),
+                'dst_ip' : kwargs.get("dst_ip", "8.8.8.8"),
+            }
 
     def to_binary(self) -> bytes:
         ip_header = self.build_header(checksum=0)
-        self.header['checksum'] = IPv4.ip_checksum(ip_header)
+        self.header['checksum'] = IP.ip_checksum(ip_header)
         ip_header = self.build_header(checksum=self.header['checksum'])
         udp_header = self.payload.to_binary(self.header['src_ip'], self.header['dst_ip'])
         self.header['total_length'] = (self.header['IHL'] * 4) + self.payload.header['length']
@@ -73,7 +76,7 @@ class IPv4(Protocol):
         payload_data = data[ihl_bytes:end]
 
         if self.header['Protocol'] == 17:
-            from UDP import UDP
+            from UDP_PROTOCOL import UDP
             udp_obj = UDP().deserializer(payload_data)
             self.payload = udp_obj
         else:

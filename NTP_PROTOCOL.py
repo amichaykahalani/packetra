@@ -1,6 +1,6 @@
 import struct
 import time
-from Protocol import Protocol
+from BaseProtocol import Protocol
 
 class NTP(Protocol):
     def __init__(self, **kwargs):
@@ -21,18 +21,18 @@ class NTP(Protocol):
         }
 
         #---------Timestamps--------
-        NOW = 2208988800 + time.time()
-        self.timestamps = {'originate_timestamp' : NOW,
+        now = 2208988800 + time.time()
+        self.timestamps = {'originate_timestamp' : now,
                            'receive_timestamp' : 0,
                            'transmit_timestamp' : 0
         }
 
     def to_binary(self):
-        LI = 0b00
-        VN = 0b100
-        MODE = 0b011
+        li = 0b00
+        vn = 0b100
+        mode = 0b011
 
-        first_byte = (LI << 6) | (VN << 3) | MODE
+        first_byte = (li << 6) | (vn << 3) | mode
         header_bytes = struct.pack('!B', first_byte)
         header_bytes += struct.pack('!2B1b',
                              self.header['stratum'],
@@ -50,9 +50,9 @@ class NTP(Protocol):
 
         #------24 bytes------
         timestamps_bytes = b''.join([
-            self.to_ntp_time(self.timestamps['originate_timestamp']),
-            self.to_ntp_time(self.timestamps['receive_timestamp']),
-            self.to_ntp_time(self.timestamps['transmit_timestamp']),
+            NTP.to_ntp_time(self.timestamps['originate_timestamp']),
+            NTP.to_ntp_time(self.timestamps['receive_timestamp']),
+            NTP.to_ntp_time(self.timestamps['transmit_timestamp']),
         ])
 
         #-----48 bytes-------
@@ -75,19 +75,21 @@ class NTP(Protocol):
             self.reference_parameters['reference_ID'] = struct.unpack("!III", packet[4:16])
 
         # ---- timestamps ----
-        self.reference_parameters['reference_timestamp'] = self.from_ntp_time(packet[16:24])
-        self.timestamps['originate_timestamp'] = self.from_ntp_time(packet[24:32])
-        self.timestamps['receive_timestamp'] = self.from_ntp_time(packet[32:40])
-        self.timestamps['transmit_timestamp'] = self.from_ntp_time(packet[40:48])
+        self.reference_parameters['reference_timestamp'] = NTP.from_ntp_time(packet[16:24])
+        self.timestamps['originate_timestamp'] = NTP.from_ntp_time(packet[24:32])
+        self.timestamps['receive_timestamp'] = NTP.from_ntp_time(packet[32:40])
+        self.timestamps['transmit_timestamp'] = NTP.from_ntp_time(packet[40:48])
 
         return self
 
-    def to_ntp_time(self, t):
+    @staticmethod
+    def to_ntp_time(t):
         seconds = int(t)
         fraction = int((t - seconds) * (2 ** 32))
         return struct.pack('!II', seconds, fraction)
 
-    def from_ntp_time(self, data):
+    @staticmethod
+    def from_ntp_time(data):
         seconds, fraction = struct.unpack('!II', data)
         return seconds + float(fraction) / 2**32
 

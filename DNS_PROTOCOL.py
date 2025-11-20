@@ -1,9 +1,7 @@
 from pprint import pprint
 import struct
 import random
-
-from Network import Network
-from Protocol import Protocol
+from BaseProtocol import Protocol
 
 class DNS(Protocol):
     def __init__(self, domain="", **kwargs):
@@ -57,66 +55,69 @@ class DNS(Protocol):
         self.raw_bytes = packet
         #--------header---------
         offset = 12
-        transID, flags, QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT = struct.unpack('!HHHHHH', packet[:offset])
-        self.header = {"transaction_id" : transID,
+        trans_id, flags, qdcount, ancount, nscount, arcount = struct.unpack('!HHHHHH', packet[:offset])
+        self.header = {"transaction_id" : trans_id,
                   "flags" : flags,
-                  "QDCOUNT" : QDCOUNT,
-                  "ANCOUNT" : ANCOUNT,
-                  "NSCOUNT" : NSCOUNT,
-                  "ARCOUNT" : ARCOUNT}
+                  "QDCOUNT" : qdcount,
+                  "ANCOUNT" : ancount,
+                  "NSCOUNT" : nscount,
+                  "ARCOUNT" : arcount}
 
         #---------question_section--------
         offset, qname_labels = DNS.parse_qname(packet, 12)
-        QNAME = '.'.join(qname_labels)
-        QTYPE, QCLASS = struct.unpack('!HH', packet[offset:offset + 4])
+        qname = '.'.join(qname_labels)
+        qtype, qclass = struct.unpack('!HH', packet[offset:offset + 4])
         offset += 4
 
-        self.question_section = {'QNAME' : QNAME,
-                            'QTYPE' : QTYPE,
-                            'QCLASS' : QCLASS}
+        self.question_section = {'QNAME' : qname,
+                            'QTYPE' : qtype,
+                            'QCLASS' : qclass}
 
         #----------answer_section---------
-        NAME = struct.unpack('!H', packet[offset:offset + 2])[0]
-        if NAME & 0xC000 == 0xC000:
-            pointer_offset = NAME & 0x3FFF
+        name = struct.unpack('!H', packet[offset:offset + 2])[0]
+        if name & 0xC000 == 0xC000:
+            pointer_offset = name & 0x3FFF
             _, labels = DNS.parse_qname(packet, pointer_offset)
-            NAME = '.'.join(labels)
+            name = '.'.join(labels)
             offset += 2
         else:
             offset, labels = DNS.parse_qname(packet, offset)
-            NAME = '.'.join(labels)
+            name = '.'.join(labels)
 
-        TYPE, CLASS, TTL, RDLENGTH = struct.unpack('!HHIH', packet[offset:offset + 10])
+        answer_type, answer_class, ttl, rdlength = struct.unpack('!HHIH', packet[offset:offset + 10])
 
         answer_offset = offset + 10
-        RDATA = packet[answer_offset:answer_offset + RDLENGTH]
-        if TYPE == 1:  # A record
-            IP = Network.get_ip('AF_INET', RDATA)
+        rdata = packet[answer_offset:answer_offset + rdlength]
+        if answer_type == 1:  # A record
+            from NetworkHandler import Network
+            ip = Network.get_ip('AF_INET', rdata)
 
-        elif TYPE == 5:  # CNAME record
+        elif answer_type == 5:  # CNAME record
             _, labels = DNS.parse_qname(packet, answer_offset)
-            IP = '.'.join(labels)
+            ip = '.'.join(labels)
 
-        elif TYPE == 6:
+        elif answer_type == 6:
             _, labels = DNS.parse_qname(packet, answer_offset)
-            IP = '.'.join(labels)
+            ip = '.'.join(labels)
 
-        elif TYPE == 28:
-            IP = Network.get_ip('AF_INET6', RDATA)
+        elif answer_type == 28:
+            from NetworkHandler import Network
+            ip = Network.get_ip('AF_INET6', rdata)
         else:
-            IP = RDATA
+            ip = rdata
 
-        self.answer_section = {"NAME" : NAME,
-                          "TYPE" : TYPE,
-                          "CLASS" : CLASS,
-                          "TTL" : TTL,
-                          "RDLENGTH" : RDLENGTH,
-                          "RDATA" : IP}
+        self.answer_section = {"NAME" : name,
+                          "TYPE" : answer_type,
+                          "CLASS" : answer_class,
+                          "TTL" : ttl,
+                          "RDLENGTH" : rdlength,
+                          "RDATA" : ip}
 
         self.all_sections = self.header | self.question_section | self.answer_section
         return self
 
-    def encode_domain(self, domain):
+    @staticmethod
+    def encode_domain(domain):
         parts = domain.split('.')
         result = b''
         for part in parts:
@@ -152,31 +153,28 @@ class DNS(Protocol):
         sections = ["Header", "Question", "Answer"]
 
         if binary:
-            packet_dict = {}
-
-            # Header
-            packet_dict["Header"] = {
+            packet_dict = {
+                # Header
+                "Header": {
                 "transaction_id": struct.pack('!H', self.header["transaction_id"]),
                 "flags": struct.pack('!H', self.header["flags"]),
                 "QDCOUNT": struct.pack('!H', self.header["QDCOUNT"]),
                 "ANCOUNT": struct.pack('!H', self.header["ANCOUNT"]),
                 "NSCOUNT": struct.pack('!H', self.header["NSCOUNT"]),
                 "ARCOUNT": struct.pack('!H', self.header["ARCOUNT"]),
-            }
-
-            # Question
-            packet_dict["Question"] = {
+            },  # Question
+                "Question": {
                 "QNAME": self.encode_domain(self.question_section["QNAME"]),
                 "QTYPE": struct.pack('!H', self.question_section["QTYPE"]),
                 "QCLASS": struct.pack('!H', self.question_section["QCLASS"]),
-            }
+            }}
 
             # Answer (אם יש)
             if self.is_response and self.answer_section:
                 ans = self.answer_section
-                NAME = self.encode_domain(ans["NAME"])
+                name = self.encode_domain(ans["NAME"])
                 packet_dict["Answer"] = {
-                    "NAME": NAME,
+                    "NAME": name,
                     "TYPE": struct.pack('!H', ans["TYPE"]),
                     "CLASS": struct.pack('!H', ans["CLASS"]),
                     "TTL": struct.pack('!I', ans["TTL"]),

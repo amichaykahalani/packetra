@@ -1,6 +1,6 @@
-from NTP import NTP
-from Network import Network
-from Protocol import Protocol
+from NTP_PROTOCOL import NTP
+from NetworkHandler import Network
+from BaseProtocol import Protocol
 import struct
 import typing
 import random
@@ -39,7 +39,7 @@ class UDP(Protocol):
         return udp_header + payload_bin
 
     def deserializer(self, data: bytes) -> Protocol:
-        from DNS import DNS
+        from DNS_PROTOCOL import DNS
         self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header['length'] = struct.unpack('!4H', data[:8])
         payload_data = data[8:self.header['length']]
 
