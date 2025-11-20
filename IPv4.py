@@ -5,7 +5,7 @@ import random
 import struct
 
 class IPv4(Protocol):
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__('IPv4')
 
         self.header = {
@@ -21,21 +21,19 @@ class IPv4(Protocol):
             'Protocol': 17,
             'checksum': 0,
             'src_ip' : Network.get_my_ip(),
-            'dst_ip' : '8.8.8.8'
+            'dst_ip' : kwargs.get("dst_ip", "8.8.8.8"),
         }
 
     def to_binary(self) -> bytes:
-        print("---------------IPv4 to_binary-----------------")
         ip_header = self.build_header(checksum=0)
         self.header['checksum'] = IPv4.ip_checksum(ip_header)
         ip_header = self.build_header(checksum=self.header['checksum'])
-        udp_header = self.payload.to_binary(src_ip=self.header['src_ip'], dst_ip=self.header['dst_ip'])
+        udp_header = self.payload.to_binary(self.header['src_ip'], self.header['dst_ip'])
         self.header['total_length'] = (self.header['IHL'] * 4) + self.payload.header['length']
         return ip_header + udp_header
 
     def build_header(self, checksum: int) -> bytes:
         first_byte = (self.header['version'] << 4) | (self.header['IHL'] & 0x0F)
-        # DSCP 6 ביט גבוהים, ECN 2 ביט נמוכים => second_byte = (DSCP << 2) | ECN
         second_byte = ((self.header['DSCP'] & 0x3F) << 2) | (self.header['ECN'] & 0x03)
 
         header = first_byte.to_bytes(1, 'big') + second_byte.to_bytes(1, 'big')
@@ -47,7 +45,6 @@ class IPv4(Protocol):
         return header
 
     def deserializer(self, data) -> Protocol:
-        print("---------------IPv4 deserializer-----------------")
         if len(data) < 20:
             raise ValueError("IPv4 packet too short")
 
@@ -75,9 +72,8 @@ class IPv4(Protocol):
         end = min(len(data), total_len)
         payload_data = data[ihl_bytes:end]
 
-        if self.header['Protocol'] == 17:  # UDP
+        if self.header['Protocol'] == 17:
             from UDP import UDP
-            # ודא ש־UDP.deserializer מחזיר מופע של UDP
             udp_obj = UDP().deserializer(payload_data)
             self.payload = udp_obj
         else:
@@ -95,5 +91,7 @@ class IPv4(Protocol):
         return ~s & 0xffff
 
     def __str__(self):
-        return f"""IP({self.header})\nUDP({self.payload.header})\nDNS({self.payload.payload}) """
+        return f"IP({self.header})\n{self.payload.__str__()}\n{self.payload.payload.__str__()}"
+
+
 

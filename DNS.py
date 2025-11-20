@@ -37,7 +37,6 @@ class DNS(Protocol):
             self.all_sections = self.header | self.question_section | self.answer_section
 
     def to_binary(self):
-        print("---------------DNS to_binary-----------------")
         packet = struct.pack('!HHHHHH',
                           self.header["transaction_id"],
                              self.header["flags"],
@@ -55,7 +54,6 @@ class DNS(Protocol):
         return packet
 
     def deserializer(self, packet):
-        print("---------------DNS deserializer-----------------")
         self.raw_bytes = packet
         #--------header---------
         offset = 12
@@ -225,6 +223,6 @@ class DNS(Protocol):
 
     def __str__(self):
         if self.is_response and self.answer_section:
-            return f'{self.header | self.question_section | self.answer_section}'
+            return f'DNS({self.header | self.question_section | self.answer_section})'
         else:
-            return f'{self.header | self.question_section}'
+            return f'DNS({self.header | self.question_section})'

@@ -57,17 +57,30 @@ class NTP(Protocol):
 
         #-----48 bytes-------
         packet = header_bytes + reference_bytes + timestamps_bytes
-        print("Sent originate_timestamp:", self.timestamps['originate_timestamp'])
         return packet
 
-    def from_bytes(self, packet):
-        _, self.header['stratum'], self.header['poll'], self.header['precision'] = struct.unpack('!3B1b', packet[:4])
-        self.reference_parameters['root_delay'], self.reference_parameters['root_dispersion'], self.reference_parameters['reference_ID'] = struct.unpack('!3I', packet[4:16])
+    def deserializer(self, packet: bytes):
+        # ---- Parse first byte ----
+        first = packet[0]
+        self.header['LI'] = (first >> 6) & 0b11
+        self.header['VN'] = (first >> 3) & 0b111
+        self.header['mode'] = first & 0b111
+
+        # ---- next bytes ----
+        self.header['stratum'], self.header['poll'], self.header['precision'] = struct.unpack("!BBb", packet[1:4])
+
+        # ---- reference parameters ----
+        self.reference_parameters['root_delay'], \
+            self.reference_parameters['root_dispersion'], \
+            self.reference_parameters['reference_ID'] = struct.unpack("!III", packet[4:16])
+
+        # ---- timestamps ----
         self.reference_parameters['reference_timestamp'] = self.from_ntp_time(packet[16:24])
         self.timestamps['originate_timestamp'] = self.from_ntp_time(packet[24:32])
         self.timestamps['receive_timestamp'] = self.from_ntp_time(packet[32:40])
         self.timestamps['transmit_timestamp'] = self.from_ntp_time(packet[40:48])
-        return self.header | self.reference_parameters | self.timestamps
+
+        return self
 
     def to_ntp_time(self, t):
         seconds = int(t)
@@ -77,5 +90,8 @@ class NTP(Protocol):
     def from_ntp_time(self, data):
         seconds, fraction = struct.unpack('!II', data)
         return seconds + float(fraction) / 2**32
+
+    def __str__(self):
+        return f"NTP({self.header | self.reference_parameters | self.timestamps})"
 
 
