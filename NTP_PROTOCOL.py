@@ -96,4 +96,3 @@ class NTP(Protocol):
     def __str__(self):
         return f"NTP({self.header | self.reference_parameters | self.timestamps})"
 
-

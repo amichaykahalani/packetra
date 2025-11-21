@@ -5,15 +5,16 @@ import struct
 import typing
 import random
 
+
 class UDP(Protocol):
     def __init__(self, **kwargs):
         super().__init__('UDP')
-        #------------Header------------
+        # ------------Header------------
         self.header: typing.Dict[str, typing.Any] = {
-            'src_port' : kwargs.get('src_port', random.randint(1025, 65535)),
-            'dst_port' : kwargs.get('dst_port', 53),
-            'checksum' : 0,
-            'length' : None
+            'src_port': kwargs.get('src_port', random.randint(1025, 65535)),
+            'dst_port': kwargs.get('dst_port', 53),
+            'checksum': 0,
+            'length': None
         }
 
     def to_binary(self, src_ip, dst_ip) -> bytes:
@@ -35,19 +36,19 @@ class UDP(Protocol):
                                  self.header['length'],
                                  self.header['checksum'])
 
-
         return udp_header + payload_bin
 
     def deserializer(self, data: bytes) -> Protocol:
         from DNS_PROTOCOL import DNS
-        self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header['length'] = struct.unpack('!4H', data[:8])
+        self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header[
+            'length'] = struct.unpack('!4H', data[:8])
         payload_data = data[8:self.header['length']]
 
         if self.header['src_port'] == 53 or self.header['dst_port'] == 53:
             dns = DNS(is_response=True)
             dns.deserializer(payload_data)
             self.payload = dns
-        
+
         if self.header['src_port'] == 123 or self.header['dst_port'] == 123:
             ntp = NTP()
             ntp.deserializer(payload_data)
