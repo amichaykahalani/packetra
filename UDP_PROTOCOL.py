@@ -57,7 +57,8 @@ class UDP(Protocol):
         return self
 
     def __str__(self) -> str:
-        return f'UDP({self.header})'
+        return f'<------UDP------>\n{self.pretty_print()}<------UDP------>'
+
 
     @staticmethod
     def udp_checksum(src_ip, dst_ip, udp_header, udp_payload):

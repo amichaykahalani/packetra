@@ -93,6 +93,26 @@ class NTP(Protocol):
         seconds, fraction = struct.unpack('!II', data)
         return seconds + float(fraction) / 2**32
 
+    def ntp_pretty_print(self) -> str:
+        pretty_protocol: str = """"""
+        pretty_protocol += '<-----NTP----->\n'
+        pretty_protocol += "|\t<-----Header----->\n"
+        for key, value in self.header.items():
+            pretty_protocol += f"|\t|{key}: {value}\n"
+        pretty_protocol += "|\t<-----Header----->\n"
+
+        pretty_protocol += "|\n\t<-----Reference Parameters----->\n"
+        for key, value in self.reference_parameters.items():
+            pretty_protocol += f"|\t|{key}: {value}\n"
+        pretty_protocol += "|\t<-----Reference Parameters----->\n"
+
+        pretty_protocol += "|\n\t<-----Timestamps----->\n"
+        for key, value in self.timestamps.items():
+            pretty_protocol += f"|\t|{key}: {value}\n"
+        pretty_protocol += "|\t<-----Timestamps----->\n"
+        pretty_protocol += '<-----NTP----->'
+        return pretty_protocol
+
     def __str__(self):
-        return f"NTP({self.header | self.reference_parameters | self.timestamps})"
+        return f"{self.ntp_pretty_print()}"
 

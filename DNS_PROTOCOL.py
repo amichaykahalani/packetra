@@ -220,7 +220,26 @@ class DNS(Protocol):
         return offset, qname_bytes
 
     def __str__(self):
+        return self.dns_pretty_print()
+
+    def dns_pretty_print(self) -> str:
+        pretty_protocol: str = """"""
+        pretty_protocol += '<-----DNS----->\n'
+        pretty_protocol += "|\t<-----Header Section----->\n"
+        for key, value in self.header.items():
+            pretty_protocol += f"|\t|{key}: {value}\n"
+        pretty_protocol += "|\t<-----Header Section----->\n"
+
+        pretty_protocol += "|\n\t<-----Question Section----->\n"
+        for key, value in self.question_section.items():
+            pretty_protocol += f"|\t|{key}: {value}\n"
+        pretty_protocol += "|\t<-----Question Section----->\n"
+
         if self.is_response and self.answer_section:
-            return f'DNS({self.header | self.question_section | self.answer_section})'
-        else:
-            return f'DNS({self.header | self.question_section})'
+            pretty_protocol += "|\n\t<-----Answer Section----->\n"
+            for key, value in self.answer_section.items():
+                pretty_protocol += f"|\t|{key}: {value}\n"
+            pretty_protocol += "|\t<-----Answer Section----->\n"
+        pretty_protocol += '<-----DNS----->'
+
+        return pretty_protocol

@@ -15,3 +15,17 @@ class Protocol:
         self.payload = protocol
         return self
 
+    def pretty_print(self, tabs: int=0):
+        if tabs > 0:
+            pretty_header = """"""
+            for key, value in self.header.items():
+                pretty_header += f"| {(tabs - 1) * '\t'}|\t {key}: {value}\n"
+
+            return pretty_header
+
+
+        pretty_header = """"""
+        for key, value in self.header.items():
+            pretty_header += f"| {key}: {value}\n"
+
+        return pretty_header

@@ -45,10 +45,8 @@ class Network:
 
     @staticmethod
     def create_sock_and_send(pkt, protocol):
-        from DNS_PROTOCOL import DNS
         pname = protocol.name
         raw_socket_protocols = ['IP', 'UDP']
-        udp_socket_protocols = ['DNS', 'NTP']
         is_raw = False
         if pname in raw_socket_protocols:
             is_raw = True

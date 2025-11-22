@@ -6,6 +6,8 @@ from typing import Dict
 
 
 class IP(Protocol):
+    is_icmp_payload = False
+
     def __init__(self, protocol_type=4, **kwargs):
         super().__init__('IP')
         self.type = protocol_type
@@ -129,6 +131,11 @@ class IP(Protocol):
 
     def __str__(self):
         if self.payload.name == 'ICMP':
-            return f"IP({self.header})\n{self.payload.__str__()}"
+            if not IP.is_icmp_payload:
+                IP.is_icmp_payload = True
+                return f"<------IP------>\n{self.pretty_print()}<------IP------>\n\n{self.payload}"
+            else:
+                IP.is_icmp_payload = False
+                return f"|\t|\t<------IP------>\n{self.pretty_print(tabs=2)}|\t|\t<------IP------>\n{self.payload}"
 
-        return f"IP({self.header})\n{self.payload.__str__()}\n{self.payload.payload.__str__()}"
+        return f"<------IP------>\n{self.pretty_print()}<------IP------>\n{self.payload}\n{self.payload.payload}"
