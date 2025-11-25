@@ -1,32 +1,30 @@
-from NetworkHandler import Network
-from BaseProtocol import Protocol
+from network import Network
+from protocols.protocol import Protocol
 import random
 import struct
 from typing import Dict
 
 
-class IP(Protocol):
+class IPv4(Protocol):
     is_icmp_payload = False
 
-    def __init__(self, protocol_type=4, **kwargs):
-        super().__init__('IP')
-        self.type = protocol_type
-        if self.type == 4:
-            self.header: Dict[str, int or str] = {
-                'version' : 4,
-                'IHL': 5,
-                'DSCP': 0,
-                'ECN': 0,
-                'total_length': 20 + 8,
-                'identification': random.randint(0, 65535),
-                'flags':0,
-                'frag_offset': 0,
-                'TTL' : 64,
-                'protocol': 17,
-                'checksum': 0,
-                'src_ip' : Network.get_my_ip(),
-                'dst_ip' : kwargs.get("dst_ip", "8.8.8.8"),
-            }
+    def __init__(self, **kwargs):
+        super().__init__('IPv4')
+        self.header: Dict[str, int or str] = {
+            'version' : 4,
+            'IHL': 5,
+            'DSCP': 0,
+            'ECN': 0,
+            'total_length': 20 + 8,
+            'identification': random.randint(0, 65535),
+            'flags':0,
+            'frag_offset': 0,
+            'TTL' : 64,
+            'protocol': 17,
+            'checksum': 0,
+            'src_ip' : Network.get_my_ip(),
+            'dst_ip' : kwargs.get("dst_ip", "8.8.8.8")}
+
 
     def to_binary(self) -> bytes:
         # Determine protocol
@@ -48,7 +46,7 @@ class IP(Protocol):
         ip_header = self.build_header(checksum=0)
 
         # Compute checksum
-        self.header['checksum'] = IP.ip_checksum(ip_header)
+        self.header['checksum'] = IPv4.ip_checksum(ip_header)
 
         # Rebuild header with checksum
         ip_header = self.build_header(checksum=self.header['checksum'])
@@ -96,11 +94,11 @@ class IP(Protocol):
         payload_data = data[ihl_bytes:end]
 
         if self.header['protocol'] == 17:
-            from UDP_PROTOCOL import UDP
+            from protocols.udp import UDP
             self.payload = UDP().deserializer(payload_data)
 
         elif self.header['protocol'] == 1:
-            from ICMP_PROTOCOL import ICMP
+            from protocols.icmp import ICMP
             self.payload = ICMP().deserializer(payload_data)
 
         else:
@@ -131,11 +129,11 @@ class IP(Protocol):
 
     def __str__(self):
         if self.payload.name == 'ICMP':
-            if not IP.is_icmp_payload:
-                IP.is_icmp_payload = True
+            if not IPv4.is_icmp_payload:
+                IPv4.is_icmp_payload = True
                 return f"<------IP------>\n{self.pretty_print()}<------IP------>\n\n{self.payload}"
             else:
-                IP.is_icmp_payload = False
+                IPv4.is_icmp_payload = False
                 return f"|\t|\t<------IP------>\n{self.pretty_print(tabs=2)}|\t|\t<------IP------>\n{self.payload}"
 
         return f"<------IP------>\n{self.pretty_print()}<------IP------>\n{self.payload}\n{self.payload.payload}"

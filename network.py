@@ -1,5 +1,5 @@
 import socket
-from BaseProtocol import Protocol
+from protocols.protocol import Protocol
 
 class Network:
 
@@ -19,13 +19,13 @@ class Network:
 
     @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
-        from IP_PROTOCOL import IP
-        from DNS_PROTOCOL import DNS
+        from protocols.ipv4 import IPv4
+        from protocols.dns import DNS
         try:
-            if protocol.name == 'IP':
+            if protocol.name == 'IPv4':
                 pkt = protocol.to_binary()
                 response = Network.create_sock_and_send(pkt, protocol)
-                return IP().deserializer(response)
+                return IPv4().deserializer(response)
 
 
             elif protocol.name == 'DNS':
@@ -46,13 +46,13 @@ class Network:
     @staticmethod
     def create_sock_and_send(pkt, protocol):
         pname = protocol.name
-        raw_socket_protocols = ['IP', 'UDP']
+        raw_socket_protocols = ['IPv4', 'UDP']
         is_raw = False
         if pname in raw_socket_protocols:
             is_raw = True
 
         if is_raw:
-            if protocol.name == 'IP':
+            if protocol.name == 'IPv4':
                 try:
                     if protocol.payload.name == 'ICMP':
                         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)

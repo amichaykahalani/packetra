@@ -1,6 +1,6 @@
 import struct
 import time
-from BaseProtocol import Protocol
+from protocols.protocol import Protocol
 
 class NTP(Protocol):
     def __init__(self, **kwargs):

@@ -1,5 +1,5 @@
 import struct
-from BaseProtocol import Protocol
+from protocols.protocol import Protocol
 from Message import Data
 
 class ICMP(Protocol):

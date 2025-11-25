@@ -1,7 +1,7 @@
 from pprint import pprint
 import struct
 import random
-from BaseProtocol import Protocol
+from protocols.protocol import Protocol
 
 class DNS(Protocol):
     def __init__(self, domain="", **kwargs):
@@ -89,7 +89,7 @@ class DNS(Protocol):
         answer_offset = offset + 10
         rdata = packet[answer_offset:answer_offset + rdlength]
         if answer_type == 1:  # A record
-            from NetworkHandler import Network
+            from network import Network
             ip = Network.get_ip('AF_INET', rdata)
 
         elif answer_type == 5:  # CNAME record
@@ -101,7 +101,7 @@ class DNS(Protocol):
             ip = '.'.join(labels)
 
         elif answer_type == 28:
-            from NetworkHandler import Network
+            from network import Network
             ip = Network.get_ip('AF_INET6', rdata)
         else:
             ip = rdata

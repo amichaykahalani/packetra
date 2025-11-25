@@ -1,4 +1,4 @@
-from BaseProtocol import Protocol
+from protocols.protocol import Protocol
 import struct
 
 class Data(Protocol):
