@@ -66,6 +66,7 @@ class IPv4(Protocol):
         return header
 
     def deserializer(self, data) -> Protocol:
+        from protocols.registry import Registry
         if len(data) < 20:
             raise ValueError("IPv4 packet too short")
 
@@ -93,17 +94,9 @@ class IPv4(Protocol):
         end = min(len(data), total_len)
         payload_data = data[ihl_bytes:end]
 
-        if self.header['protocol'] == 17:
-            from protocols.udp import UDP
-            self.payload = UDP().deserializer(payload_data)
-
-        elif self.header['protocol'] == 1:
-            from protocols.icmp import ICMP
-            self.payload = ICMP().deserializer(payload_data)
-
-        else:
-            self.payload = payload_data
-
+        registry = Registry()
+        self.payload = registry.ip_type.get(self.header['protocol'])
+        self.payload.deserializer(payload_data)
         return self
 
     @staticmethod

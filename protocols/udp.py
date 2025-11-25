@@ -39,21 +39,13 @@ class UDP(Protocol):
         return udp_header + payload_bin
 
     def deserializer(self, data: bytes) -> Protocol:
+        from protocols.registry import Registry
+        registry = Registry()
         from protocols.dns import DNS
         self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header[
             'length'] = struct.unpack('!4H', data[:8])
         payload_data = data[8:self.header['length']]
-
-        if self.header['src_port'] == 53 or self.header['dst_port'] == 53:
-            dns = DNS(is_response=True)
-            dns.deserializer(payload_data)
-            self.payload = dns
-
-        if self.header['src_port'] == 123 or self.header['dst_port'] == 123:
-            ntp = NTP()
-            ntp.deserializer(payload_data)
-            self.payload = ntp
-
+        self.payload = registry.protocol_ports.get(self.header['src_port']).deserializer(payload_data)
         return self
 
     def __str__(self) -> str:

@@ -1,4 +1,4 @@
-from protocol import Protocol
+from protocols.protocol import Protocol
 import struct
 
 class ARP(Protocol):

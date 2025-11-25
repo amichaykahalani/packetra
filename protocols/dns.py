@@ -10,29 +10,24 @@ class DNS(Protocol):
         self.raw_bytes = None
         concepts_types = {"IPv4" : 1, "Name Server" : 2, "IPv6" : 28, "ANY" : 255}
         concepts_classes = {"IN" : 1}
-        if not self.is_response:
-            #-----------Header----------
-            self.header = {"transaction_id" : random.getrandbits(16),
+        #-----------Header----------
+        self.header = {"transaction_id" : random.getrandbits(16),
                            "flags" : 0x0100,
                            "QDCOUNT" : 1,
                            "ANCOUNT" : 0,
                            "NSCOUNT" : 0,
                            "ARCOUNT" : 0}
 
-            #---------Question section-----------
-            self.question_section = {"QNAME" : domain,
+        #---------Question section-----------
+        self.question_section = {"QNAME" : domain,
                                      "QTYPE" : concepts_types.get(kwargs.get('record_type'), concepts_types.get("IPv4")),
                                      "QCLASS" : concepts_classes.get(kwargs.get('class_type'), concepts_classes.get("IN"))}
 
-        else:
-            # -----------Header----------
-            self.header = {}
-            # ---------Question section-----------
-            self.question_section = {}
-            #---------Answer section------------
-            self.answer_section = {}
 
-            self.all_sections = self.header | self.question_section | self.answer_section
+        #---------Answer section------------
+        self.answer_section = {}
+
+        self.all_sections = self.header | self.question_section | self.answer_section
 
     def to_binary(self):
         packet = struct.pack('!HHHHHH',
@@ -52,6 +47,7 @@ class DNS(Protocol):
         return packet
 
     def deserializer(self, packet):
+        self.is_response = True
         self.raw_bytes = packet
         #--------header---------
         offset = 12

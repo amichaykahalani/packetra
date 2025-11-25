@@ -57,19 +57,19 @@ class Network:
                     if protocol.payload.name == 'ICMP':
                         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
                         sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(5.0)
+                        sock.settimeout(10)
                         sock.sendto(pkt, (protocol.header['dst_ip'], 0))
 
                     elif protocol.payload.payload.name == 'DNS':
                         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
                         sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(5.0)
+                        sock.settimeout(10)
                         sock.sendto(pkt, ("8.8.8.8", 53))
 
                     elif protocol.payload.payload.name == 'NTP':
                         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
                         sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(5.0)
+                        sock.settimeout(10)
                         sock.sendto(pkt, ("129.159.140.221", 123))
 
                 except Exception as e:
