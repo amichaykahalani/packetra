@@ -1,4 +1,7 @@
 import socket
+import struct
+from protocols.arp import ARP
+from protocols.ethernet import Ethernet
 from protocols.protocol import Protocol
 
 class Network:
@@ -22,6 +25,12 @@ class Network:
         from protocols.ipv4 import IPv4
         from protocols.dns import DNS
         try:
+
+            if protocol.name == 'Ethernet':
+                pkt = protocol.to_binary()
+                response = Network.create_sock_and_send(pkt, protocol)
+                return Ethernet().deserializer(response)
+
             if protocol.name == 'IPv4':
                 pkt = protocol.to_binary()
                 response = Network.create_sock_and_send(pkt, protocol)
@@ -46,13 +55,31 @@ class Network:
     @staticmethod
     def create_sock_and_send(pkt, protocol):
         pname = protocol.name
-        raw_socket_protocols = ['IPv4', 'UDP']
+        raw_socket_protocols = ['IPv4'] #I remove the udp from here.
+        af_packet_protocols = ['Ethernet', 'ARP']
         is_raw = False
+        is_ether = False
+        if pname in af_packet_protocols:
+            is_ether = True
+
         if pname in raw_socket_protocols:
             is_raw = True
 
+        if is_ether:
+            if pname == 'Ethernet' and protocol.payload and protocol.payload.name == 'ARP':
+                ETH_P_ARP = 0x0806
+                sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(ETH_P_ARP))
+                sock.bind(('ens33', ETH_P_ARP))
+                sock.send(pkt)
+                while True:
+                    response, addr = sock.recvfrom(65535)
+                    eth_type = struct.unpack('!H', pkt[12:14])[0]
+
+                    if eth_type == ETH_P_ARP:
+                        return response
+
         if is_raw:
-            if protocol.name == 'IPv4':
+            if pname == 'IPv4':
                 try:
                     if protocol.payload.name == 'ICMP':
                         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
