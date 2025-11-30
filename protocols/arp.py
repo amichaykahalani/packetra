@@ -1,12 +1,12 @@
 from protocols.ethernet import Ethernet
 from protocols.protocol import Protocol
+from network import Network
 import struct
 
 class ARP(Protocol):
     def __init__(self,
                  operation: int = 1,
-                 sender_mac: bytes = b"\x00"*6,
-                 sender_ip: str = "192.168.1.212",
+                 sender_ip: str = Network.get_my_ip(),
                  target_mac: bytes = b"\x00"*6,
                  target_ip: str = "192.168.1.149"):
 
@@ -16,7 +16,7 @@ class ARP(Protocol):
                        'hardware_length' : 6,
                        'protocol_length' : 4,
                        'operation' : operation,
-                       'sender_mac' : Ethernet.get_mac_addr(),
+                       'sender_mac' : Network.get_my_mac('ens33'),
                        'sender_ip' : sender_ip,
                        'target_mac' : target_mac,
                        'target_ip' : target_ip}
@@ -47,7 +47,7 @@ class ARP(Protocol):
         self.packet['operation'] = fields[4]
         self.packet['sender_mac'] = Ethernet.mac_to_str(fields[5])
         self.packet['sender_ip'] = Network.convert_bytes_into_ip(fields[6])
-        self.packet['target_mac'] = Ethernet.mac_to_str(fields[5])
+        self.packet['target_mac'] = Ethernet.mac_to_str(fields[7])
         self.packet['target_ip'] = Network.convert_bytes_into_ip(fields[8])
         return self
 

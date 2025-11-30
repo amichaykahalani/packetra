@@ -66,7 +66,7 @@ class IPv4(Protocol):
         return header
 
     def deserializer(self, data) -> Protocol:
-        from protocols.registry import Registry
+        from registry import Registry
         if len(data) < 20:
             raise ValueError("IPv4 packet too short")
 

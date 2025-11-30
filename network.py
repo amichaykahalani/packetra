@@ -1,8 +1,8 @@
-import socket
-import struct
-from protocols.arp import ARP
 from protocols.ethernet import Ethernet
 from protocols.protocol import Protocol
+import socket
+import struct
+import fcntl
 
 class Network:
 
@@ -128,3 +128,10 @@ class Network:
     @staticmethod
     def convert_bytes_into_ip(ip: bytes) -> str:
         return socket.inet_ntop(socket.AF_INET, ip)
+
+    @staticmethod
+    def get_my_mac(iface: str) -> bytes:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        info = fcntl.ioctl(sock.fileno(), 0x8927, struct.pack('256s', iface.encode('utf-8')))
+        mac = info[18:24]
+        return mac

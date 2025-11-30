@@ -3,26 +3,24 @@ import struct
 import uuid
 
 class Ethernet(Protocol):
-    def __init__(self):
+    def __init__(self, **kwargs):
+        from network import Network
         super().__init__('Ethernet')
         self.frame = {
             'header' : {
-                'dst_mac_addr': [0xFF]*6, #this is broadcast address
-                'src_mac_addr': Ethernet.get_mac_addr(),
-                'type': 0x0800
+                'dst_mac_addr': kwargs.get('dst_mac_addr', bytes([0xFF] * 6)), #this is broadcast address
+                'src_mac_addr': kwargs.get('src_mac_addr', Network.get_my_mac('ens33')),
+                'type': kwargs.get('type', 0x0800)
             },
-            'data': b'',
+            'data': kwargs.get('data', b''),
         }
+
         self.payload = None
 
     def to_binary(self) -> bytes:
         # header: dst MAC (6), src MAC (6), EtherType (2)
-        bin_frame = struct.pack(
-            '!6B6BH',
-            *self.frame['header']['dst_mac_addr'],
-            *self.frame['header']['src_mac_addr'],
-            self.frame['header']['type']
-        )
+        bin_frame = self.frame['header']['dst_mac_addr'] + self.frame['header']['src_mac_addr']
+        bin_frame += struct.pack('!H',self.frame['header']['type'])
 
         if self.payload:
             self.frame['data'] = self.payload.to_binary()
@@ -62,11 +60,6 @@ class Ethernet(Protocol):
         pretty_protocol += f"|\t{self.payload}"
         pretty_protocol += "|\n<-----Ethernet----->\n"
         return pretty_protocol
-
-    @staticmethod
-    def get_mac_addr() -> list[int]:
-        mac = uuid.getnode()
-        return [(mac >> ele) & 0xff for ele in range(40, -1, -8)]
 
     @staticmethod
     def mac_to_str(mac_bytes: bytes) -> str:
