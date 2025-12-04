@@ -1,4 +1,5 @@
 from protocols.arp import ARP
+from protocols.ethernet import Ethernet
 from protocols.ipv4 import IPv4
 from protocols.icmp import ICMP
 from protocols.udp import UDP
@@ -20,4 +21,21 @@ class Registry:
         self.protocol_ports = {
             53: DNS(),
             123: NTP()
+        }
+
+        self.packets = {
+            1: DNS,
+            2: NTP,
+            3: Ethernet,
+            4: IPv4
+        }
+
+        #i changed things here dont forget
+        self.ip_protocols = {
+            "udp": UDP(),
+            "icmp": ICMP()
+        }
+
+        self.ethernet_protocols = {
+            "arp": ARP(),
         }

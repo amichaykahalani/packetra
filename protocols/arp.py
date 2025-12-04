@@ -4,22 +4,18 @@ from network import Network
 import struct
 
 class ARP(Protocol):
-    def __init__(self,
-                 operation: int = 1,
-                 sender_ip: str = Network.get_my_ip(),
-                 target_mac: bytes = b"\x00"*6,
-                 target_ip: str = "192.168.1.149"):
+    def __init__(self, **kwargs):
 
         super().__init__("ARP")
-        self.packet = {'hardware_type' : 1,
-                       'protocol_type' : 0x0800,
-                       'hardware_length' : 6,
-                       'protocol_length' : 4,
-                       'operation' : operation,
+        self.packet = {'hardware_type' : kwargs.get('hardware_type', 1),
+                       'protocol_type' : kwargs.get('protocol_type', 0x0800),
+                       'hardware_length' : kwargs.get('hardware_length', 6),
+                       'protocol_length' : kwargs.get('protocol_length', 4),
+                       'operation' : kwargs.get('operation', 1),
                        'sender_mac' : Network.get_my_mac('ens33'),
-                       'sender_ip' : sender_ip,
-                       'target_mac' : target_mac,
-                       'target_ip' : target_ip}
+                       'sender_ip' : kwargs.get('sender_ip', Network.get_my_ip()),
+                       'target_mac' : kwargs.get('target_mac', b"\x00"*6),
+                       'target_ip' : kwargs.get('target_ip', '192.168.1.149'),}
 
     def to_binary(self) -> bytes:
         from network import Network

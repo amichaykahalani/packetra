@@ -16,3 +16,6 @@ class Data(Protocol):
     def deserializer(self, data: bytes):
         self.data = struct.unpack(f"!{len(data)}s", data)[0]
         self.length = len(data)
+
+    def __str__(self):
+        return f"|\t{self.data}"

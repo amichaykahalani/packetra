@@ -5,80 +5,123 @@ from protocols.protocol import Protocol
 class NTP(Protocol):
     def __init__(self, **kwargs):
         super().__init__('NTP')
-        #-----------Header------------
-        self.header = {'LI' : kwargs.get('LI', 0),
-                  'VN' : kwargs.get('VN', 4),
-                  'mode' : kwargs.get('mode', 3),
-                  'stratum' : kwargs.get('stratum', 0),
-                  'poll' : kwargs.get('poll', 10),
-                  'precision' : kwargs.get('precision', 0)}
+        mode = kwargs.get('mode', 3)
 
-        #----------Reference Parameters------------
-        self.reference_parameters = {'root_delay' : 0,
-                     'root_dispersion' : 0,
-                     'reference_ID' : 0,
-                     'reference_timestamp': 0
-        }
+        if mode in (3, 4):
+            self.header = {
+                'LI': kwargs.get('LI', 0),
+                'VN': kwargs.get('VN', 4),
+                'mode': 3,
+                'stratum': kwargs.get('stratum', 0),
+                'poll': int(kwargs.get('poll', 4)),
+                'precision': kwargs.get('precision', -20)
+            }
 
-        #---------Timestamps--------
-        now = 2208988800 + time.time()
-        self.timestamps = {'originate_timestamp' : now,
-                           'receive_timestamp' : 0,
-                           'transmit_timestamp' : 0
-        }
+            self.reference_parameters = {
+                'root_delay': 0,
+                'root_dispersion': 0,
+                'reference_ID': 0,
+                'reference_timestamp': 0
+            }
+
+            now = int(2208988800 + time.time())
+            self.timestamps = {
+                'originate_timestamp': 0,
+                'receive_timestamp': 0,
+                'transmit_timestamp': now
+            }
+
+        elif mode == 6:  # Control Message
+            self.header = {
+                'LI': kwargs.get('LI', 0),
+                'VN': kwargs.get('VN', 4),
+                'mode': 6,
+                'opcode': kwargs.get('opcode', 0),
+                'sequence': kwargs.get('sequence', 1),
+                'status': kwargs.get('status', 0),
+                'association_id': kwargs.get('association_id', 0),
+                'offset': kwargs.get('offset', 0),
+                'count': kwargs.get('count', 0),
+                'data': kwargs.get('data', b'')
+            }
 
     def to_binary(self):
-        li = 0b00
-        vn = 0b100
-        mode = 0b011
+        mode = self.header['mode']
 
-        first_byte = (li << 6) | (vn << 3) | mode
-        header_bytes = struct.pack('!B', first_byte)
-        header_bytes += struct.pack('!2B1b',
-                             self.header['stratum'],
-                                self.header['poll'],
-                                self.header['precision'])
+        li = self.header['LI']
+        vn = self.header['VN']
+        mode_bits = mode
 
-        #------4 bytes------
-        reference_bytes = struct.pack('!III',
-                           self.reference_parameters['root_delay'],
-                           self.reference_parameters['root_dispersion'],
-                           self.reference_parameters['reference_ID'])
+        first_byte = (li << 6) | (vn << 3) | mode_bits
+        packet = struct.pack("!B", first_byte)
 
-        reference_bytes += self.to_ntp_time(self.reference_parameters['reference_timestamp'])
+        if mode == 3:
+            packet += struct.pack("!BBb",
+                                  self.header['stratum'],
+                                  self.header['poll'],
+                                  self.header['precision'])
 
+            packet += struct.pack("!III",
+                                  self.reference_parameters['root_delay'],
+                                  self.reference_parameters['root_dispersion'],
+                                  self.reference_parameters['reference_ID'])
 
-        #------24 bytes------
-        timestamps_bytes = b''.join([
-            NTP.to_ntp_time(self.timestamps['originate_timestamp']),
-            NTP.to_ntp_time(self.timestamps['receive_timestamp']),
-            NTP.to_ntp_time(self.timestamps['transmit_timestamp']),
-        ])
+            packet += NTP.to_ntp_time(self.reference_parameters['reference_timestamp'])
 
-        #-----48 bytes-------
-        packet = header_bytes + reference_bytes + timestamps_bytes
-        return packet
+            packet += b''.join([
+                NTP.to_ntp_time(self.timestamps['originate_timestamp']),
+                NTP.to_ntp_time(self.timestamps['receive_timestamp']),
+                NTP.to_ntp_time(self.timestamps['transmit_timestamp']),
+            ])
+
+            return packet
+
+        elif mode == 6:
+            packet += struct.pack("!BHHHHH",
+                                  self.header['opcode'],
+                                  self.header['sequence'],
+                                  self.header['status'],
+                                  self.header['association_id'],
+                                  self.header['offset'],
+                                  self.header['count'])
+
+            packet += self.header['data']
+            return packet
 
     def deserializer(self, packet: bytes):
-        # ---- Parse first byte ----
         first = packet[0]
+        mode = first & 0b111
+
         self.header['LI'] = (first >> 6) & 0b11
         self.header['VN'] = (first >> 3) & 0b111
-        self.header['mode'] = first & 0b111
+        self.header['mode'] = mode
 
-        # ---- next bytes ----
-        self.header['stratum'], self.header['poll'], self.header['precision'] = struct.unpack("!BBb", packet[1:4])
+        if mode in (3, 4):
+            self.header['stratum'], self.header['poll'], self.header['precision'] = struct.unpack("!BBb", packet[1:4])
 
-        # ---- reference parameters ----
-        self.reference_parameters['root_delay'], \
-            self.reference_parameters['root_dispersion'], \
-            self.reference_parameters['reference_ID'] = struct.unpack("!III", packet[4:16])
+            rd, disp, ref_id = struct.unpack("!III", packet[4:16])
+            self.reference_parameters['root_delay'] = rd
+            self.reference_parameters['root_dispersion'] = disp
+            self.reference_parameters['reference_ID'] = ref_id
 
-        # ---- timestamps ----
-        self.reference_parameters['reference_timestamp'] = NTP.from_ntp_time(packet[16:24])
-        self.timestamps['originate_timestamp'] = NTP.from_ntp_time(packet[24:32])
-        self.timestamps['receive_timestamp'] = NTP.from_ntp_time(packet[32:40])
-        self.timestamps['transmit_timestamp'] = NTP.from_ntp_time(packet[40:48])
+            self.reference_parameters['reference_timestamp'] = NTP.from_ntp_time(packet[16:24])
+            self.timestamps['originate_timestamp'] = NTP.from_ntp_time(packet[24:32])
+            self.timestamps['receive_timestamp'] = NTP.from_ntp_time(packet[32:40])
+            self.timestamps['transmit_timestamp'] = NTP.from_ntp_time(packet[40:48])
+
+        elif mode == 6:
+            opcode = packet[1]
+            seq, status, assoc, offset, count = struct.unpack("!HHHHH", packet[2:12])
+
+            self.header.update({
+                'opcode': opcode,
+                'sequence': seq,
+                'status': status,
+                'association_id': assoc,
+                'offset': offset,
+                'count': count,
+                'data': packet[12:12+count]
+            })
 
         return self
 

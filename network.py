@@ -24,6 +24,7 @@ class Network:
     def send_and_received(protocol: Protocol) -> Protocol:
         from protocols.ipv4 import IPv4
         from protocols.dns import DNS
+        from protocols.ntp import NTP
         try:
 
             if protocol.name == 'Ethernet':
@@ -31,11 +32,15 @@ class Network:
                 response = Network.create_sock_and_send(pkt, protocol)
                 return Ethernet().deserializer(response)
 
-            if protocol.name == 'IPv4':
+            elif protocol.name == 'IPv4':
                 pkt = protocol.to_binary()
                 response = Network.create_sock_and_send(pkt, protocol)
                 return IPv4().deserializer(response)
 
+            elif protocol.name == 'NTP':
+                pkt = protocol.to_binary()
+                response = Network.create_sock_and_send(pkt, protocol)
+                return NTP().deserializer(response)
 
             elif protocol.name == 'DNS':
                 pkt = protocol.to_binary()
@@ -87,6 +92,12 @@ class Network:
                         sock.settimeout(10)
                         sock.sendto(pkt, (protocol.header['dst_ip'], 0))
 
+                    elif protocol.payload.name == 'UDP' and protocol.payload.payload is None:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+                        sock.settimeout(10)
+                        sock.sendto(pkt, (protocol.header['dst_ip'], protocol.payload.header['dst_port']))
+
                     elif protocol.payload.payload.name == 'DNS':
                         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
                         sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
@@ -101,6 +112,10 @@ class Network:
 
                 except Exception as e:
                     print(e)
+
+        elif pname == 'NTP':
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(pkt, ("129.159.140.221", 123))
 
         elif pname == 'DNS':
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

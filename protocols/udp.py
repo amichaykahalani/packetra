@@ -17,9 +17,12 @@ class UDP(Protocol):
         }
 
     def to_binary(self, src_ip, dst_ip) -> bytes:
-        payload_bin = self.payload.to_binary()
+        if self.payload is not None:
+            payload_bin = self.payload.to_binary()
+            length = 8 + len(payload_bin)
+        else:
+            length = 8
 
-        length = 8 + len(payload_bin)
         self.header['length'] = length
 
         udp_header = struct.pack("!HHHH",
@@ -27,15 +30,22 @@ class UDP(Protocol):
                                  self.header['dst_port'],
                                  self.header['length'],
                                  self.header['checksum'])
-        checksum = UDP.udp_checksum(src_ip, dst_ip, udp_header, payload_bin)
+
+        if self.payload is not None:
+            checksum = UDP.udp_checksum(src_ip, dst_ip, udp_header, payload_bin)
+        else:
+            checksum = UDP.udp_checksum(src_ip, dst_ip, udp_header)
+
         self.header['checksum'] = checksum
         udp_header = struct.pack("!HHHH",
                                  self.header['src_port'],
                                  self.header['dst_port'],
                                  self.header['length'],
                                  self.header['checksum'])
-
-        return udp_header + payload_bin
+        if self.payload is not None:
+            return udp_header + payload_bin
+        else:
+            return udp_header
 
     def deserializer(self, data: bytes) -> Protocol:
         from registry import Registry
@@ -51,16 +61,28 @@ class UDP(Protocol):
 
 
     @staticmethod
-    def udp_checksum(src_ip, dst_ip, udp_header, udp_payload):
-        pseudo_header = struct.pack(
-            "!4s4sBBH",
-            Network.convert_ip_into_bytes(src_ip),
-            Network.convert_ip_into_bytes(dst_ip),
-            0,
-            17,  # UDP
-            len(udp_header) + len(udp_payload)
-        )
-        data = pseudo_header + udp_header + udp_payload
+    def udp_checksum(src_ip, dst_ip, udp_header, udp_payload=None):
+        if udp_payload is not None:
+            pseudo_header = struct.pack(
+                "!4s4sBBH",
+                Network.convert_ip_into_bytes(src_ip),
+                Network.convert_ip_into_bytes(dst_ip),
+                0,
+                17,  # UDP
+                len(udp_header) + len(udp_payload)
+            )
+            data = pseudo_header + udp_header + udp_payload
+
+        else:
+            pseudo_header = struct.pack(
+                "!4s4sBBH",
+                Network.convert_ip_into_bytes(src_ip),
+                Network.convert_ip_into_bytes(dst_ip),
+                0,
+                17,
+                len(udp_header)
+            )
+            data = pseudo_header + udp_header
 
         if len(data) % 2:
             data += b'\x00'
