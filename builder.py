@@ -26,8 +26,8 @@ class Builder:
                 return new_value_str.lower() in ("1", "true", "yes", "y")
             if isinstance(original, list):
                 return new_value_str.split(',')
-        except Exception:
-            pass
+        except Exception as e:
+            print(e)
         return new_value_str
 
     @staticmethod

