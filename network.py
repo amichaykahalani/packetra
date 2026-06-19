@@ -63,8 +63,8 @@ class Network:
         ours before treating a received frame as the reply.
         """
         iface = Network.get_default_iface()
-        ethertype = protocol.frame['header']['type']
-        our_mac = protocol.frame['header']['src_mac_addr']
+        ethertype = protocol.header['type']
+        our_mac = protocol.header['src_mac_addr']
 
         send_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype))
         send_sock.bind((iface, 0))

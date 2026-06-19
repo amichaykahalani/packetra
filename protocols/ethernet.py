@@ -44,13 +44,13 @@ class Ethernet(Protocol):
         self.header["type"] = struct.unpack("!H", data[12:14])[0]
 
         self.data = data[self.HEADER_LENGTH:]
-        self.frame['data'] = payload_data
+        payload_data = self.data
         self.payload = self._deserialize_payload(payload_data)
 
         return self
 
     def _deserialize_payload(self, payload_data: bytes):
-        ethertype = self.frame['header']['type']
+        ethertype = self.header['type']
 
         if ethertype == 0x0806 and len(payload_data) >= 28:  # ARP
             from protocols.arp import ARP
