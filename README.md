@@ -1,61 +1,81 @@
-*Packetra – Network Packet Crafting Tool*
+Packetra – Network Packet Crafting & Analysis Tool
+===================================================
 
-Packetra is an advanced Python tool for creating, customizing, and sending network packets. It supports multiple protocols, including IPv4, UDP, ICMP, DNS, NTP, Ethernet, and ARP. This tool is designed for learning, testing, and research purposes in networking and cybersecurity.
+Packetra is a Python-based low-level network packet crafting and analysis tool designed for networking research, protocol understanding, and cybersecurity education.
 
-*Features*
+It provides a hands-on environment for building, modifying, and transmitting custom network packets across multiple protocol layers, helping users understand how network communication operates at a fundamental level.
 
-Craft packets for IPv4, UDP, ICMP, DNS, NTP, Ethernet, and ARP.
+---------------------------------------------------
 
-Add nested payloads (e.g., IP → UDP → DNS/NTP).
+Features
+--------
 
-Interactive modification of packet fields (IP headers, UDP ports, DNS questions, NTP timestamps, etc.).
+- Craft custom network packets using raw protocol layers:
+  Ethernet II, IPv4, UDP, ICMP, ARP, DNS, and NTP
 
-Send packets and receive responses from real servers.
+- Build nested packet structures:
+  Ethernet → IPv4 → UDP → DNS / NTP
 
-Supports raw packet building for advanced networking experiments.
+- Interactive command-line interface for real-time packet construction
 
-Simple, user-friendly command-line interface.
-You will be prompted to choose an action:
+- Full control over packet fields:
+  IP addresses, ports, DNS queries, ARP fields, timestamps, and more
 
-- DoS Attack
+- Send crafted packets over the network and observe responses
 
-- MITM Attack
+- Inspect and analyze returned packets for debugging and learning purposes
 
-- Create packets
+- Lightweight CLI designed for fast experimentation and educational use
 
-Follow the prompts to build your packets:
+---------------------------------------------------
 
-- Select the protocol(s) you want to use.
+Educational Purpose
+-------------------
 
-- Add nested protocols if needed.
+Packetra is designed to help users understand:
 
-- Modify fields interactively.
+- OSI model and network layer separation
+- TCP/IP protocol stack behavior
+- Packet encapsulation and decapsulation
+- Structure and fields of common network protocols
+- How data is transmitted and processed across networks at a low level
 
-- Send the packet and view the response.
+---------------------------------------------------
 
-Example:
-Craft an IPv4 packet with UDP → DNS payload, change the DNS query domain, and send it to a DNS server.
+Example Use Case
+----------------
 
-*Supported Protocols*
+Build and send a custom packet:
 
+IPv4 → UDP → DNS Query
+
+- Set source and destination IP addresses manually
+- Modify DNS query fields interactively
+- Send the packet to a DNS resolver
+- Receive and analyze the response packet
+
+---------------------------------------------------
+
+Supported Protocols
+--------------------
+
+- Ethernet II
 - IPv4
-
 - UDP
-
 - ICMP
-
 - DNS
-
 - NTP
-
-- Ethernet
-
 - ARP
 
-*Security and Legal Disclaimer*
+Packetra is built using Scapy for packet construction, manipulation, and network interaction.
 
-Packetra is intended for educational and research purposes only.
+---------------------------------------------------
 
-Do not use this tool to attack systems without permission. Unauthorized use may violate laws and regulations.
+Ethical and Legal Notice
+------------------------
 
-Users are fully responsible for their actions.
+Packetra is intended strictly for educational and authorized testing environments.
+
+Any use of this tool against systems, networks, or devices without explicit permission is strictly prohibited and may violate applicable laws and regulations.
+
+The author assumes no responsibility for misuse or damage caused by this tool.
