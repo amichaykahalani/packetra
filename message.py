@@ -18,4 +18,8 @@ class Data(Protocol):
         self.length = len(data)
 
     def __str__(self):
-        return f"|\t{self.data}"
+        try:
+            text = self.data.decode('utf-8', errors='replace')
+        except Exception:
+            text = repr(self.data)
+        return self.format_table("Message", {"data": text})

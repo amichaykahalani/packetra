@@ -1,92 +1,92 @@
+import random
+import struct
+import socket
+import typing
+
 from network import Network
 from protocols.protocol import Protocol
-import struct
-import typing
-import random
 
 
 class UDP(Protocol):
+    TYPE_ID = 17
+    HEADER_LENGTH = 8  # src_port + dst_port + length + checksum, 2 bytes each
+
     def __init__(self, **kwargs):
         super().__init__('UDP')
-        # ------------Header------------
         self.header: typing.Dict[str, typing.Any] = {
             'src_port': kwargs.get('src_port', random.randint(1025, 65535)),
             'dst_port': kwargs.get('dst_port', 53),
             'checksum': 0,
-            'length': None
+            'length': 0,
         }
+        # Populated by the parent IPv4 layer in IPv4.to_binary() before
+        # this layer's to_binary() runs, since the UDP checksum needs the
+        # IP pseudo-header. Only used standalone if UDP is ever the root.
+        self.src_ip = ""
+        self.dst_ip = ""
+        self.payload = None
 
-    def to_binary(self, src_ip, dst_ip) -> bytes:
-        if self.payload is not None:
-            payload_bin = self.payload.to_binary()
-            length = 8 + len(payload_bin)
-        else:
-            length = 8
+    def setup(self):
+        port = input(f"Destination port (default {self.header['dst_port']}): ").strip()
+        if port.isdigit():
+            self.header['dst_port'] = int(port)
 
-        self.header['length'] = length
+    def to_binary(self) -> bytes:
+        payload_bin = self.payload.to_binary() if self.payload else b''
+        self.header['length'] = self.HEADER_LENGTH + len(payload_bin)
 
-        udp_header = struct.pack("!HHHH",
-                                 self.header['src_port'],
-                                 self.header['dst_port'],
-                                 self.header['length'],
-                                 self.header['checksum'])
+        udp_header = self._pack_header(checksum=0)
+        self.header['checksum'] = UDP.udp_checksum(self.src_ip, self.dst_ip, udp_header, payload_bin)
+        udp_header = self._pack_header(checksum=self.header['checksum'])
 
-        if self.payload is not None:
-            checksum = UDP.udp_checksum(src_ip, dst_ip, udp_header, payload_bin)
-        else:
-            checksum = UDP.udp_checksum(src_ip, dst_ip, udp_header)
+        return udp_header + payload_bin
 
-        self.header['checksum'] = checksum
-        udp_header = struct.pack("!HHHH",
-                                 self.header['src_port'],
-                                 self.header['dst_port'],
-                                 self.header['length'],
-                                 self.header['checksum'])
-        if self.payload is not None:
-            return udp_header + payload_bin
-        else:
-            return udp_header
+    def _pack_header(self, checksum: int) -> bytes:
+        return struct.pack(
+            "!HHHH",
+            self.header['src_port'],
+            self.header['dst_port'],
+            self.header['length'],
+            checksum,
+        )
 
     def deserializer(self, data: bytes) -> Protocol:
-        from registry import Registry
-        registry = Registry()
-        self.header['src_port'], self.header['dst_port'], self.header['checksum'], self.header[
-            'length'] = struct.unpack('!4H', data[:8])
+        header_data = struct.unpack('!4H', data[:8])
+        (self.header['src_port'], self.header['dst_port'],
+         self.header['length'], self.header['checksum']) = header_data
+
         payload_data = data[8:self.header['length']]
-        self.payload = registry.protocol_ports.get(self.header['src_port']).deserializer(payload_data)
+
+        next_proto_class = Protocol.registry.get(self.header['dst_port'])
+        if next_proto_class and len(payload_data) > 0:
+            self.payload = next_proto_class().deserializer(payload_data)
+        else:
+            self.payload = None
+
         return self
 
-    def __str__(self) -> str:
-        return f'<------UDP------>\n{self.pretty_print()}<------UDP------>'
-
-
     @staticmethod
-    def udp_checksum(src_ip, dst_ip, udp_header, udp_payload=None):
-        if udp_payload is not None:
-            pseudo_header = struct.pack(
-                "!4s4sBBH",
-                Network.convert_ip_into_bytes(src_ip),
-                Network.convert_ip_into_bytes(dst_ip),
-                0,
-                17,  # UDP
-                len(udp_header) + len(udp_payload)
-            )
-            data = pseudo_header + udp_header + udp_payload
-
-        else:
-            pseudo_header = struct.pack(
-                "!4s4sBBH",
-                Network.convert_ip_into_bytes(src_ip),
-                Network.convert_ip_into_bytes(dst_ip),
-                0,
-                17,
-                len(udp_header)
-            )
-            data = pseudo_header + udp_header
+    def udp_checksum(src_ip: str, dst_ip: str, udp_header: bytes, udp_payload: bytes = None) -> int:
+        pseudo_header = struct.pack(
+            "!4s4sBBH",
+            Network.convert_ip_into_bytes(src_ip),
+            Network.convert_ip_into_bytes(dst_ip),
+            0,
+            17,  # UDP protocol number
+            len(udp_header) + (len(udp_payload) if udp_payload else 0),
+        )
+        data = pseudo_header + udp_header + (udp_payload if udp_payload else b'')
 
         if len(data) % 2:
             data += b'\x00'
 
         s = sum(struct.unpack(f"!{len(data) // 2}H", data))
         s = (s & 0xffff) + (s >> 16)
-        return ~s & 0xffff
+        s = ~s & 0xffff
+        return s if s != 0 else 0xFFFF
+
+    def get_socket_info(self):
+        """Only relevant if UDP is used as a standalone root protocol
+        (not wrapped in IPv4). When nested under IPv4, this is unused —
+        IPv4.get_socket_info() handles the raw socket instead."""
+        return socket.SOCK_DGRAM, (self.dst_ip, self.header['dst_port'])

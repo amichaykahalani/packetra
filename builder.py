@@ -1,177 +1,61 @@
-from protocols.udp import UDP
-from protocols.icmp import ICMP
-from protocols.ipv4 import IPv4
-from protocols.dns import DNS
-from protocols.ntp import NTP
-from protocols.ethernet import Ethernet
-from protocols.arp import ARP
-from network import Network
 from protocols.protocol import Protocol
-from registry import Registry
-
+from network import Network
+from factory import ProtocolFactory
 
 class Builder:
-    def __init__(self):
-        pass
-
     @staticmethod
     def cast_value(original, new_value_str):
-        """Convert input to same type as original field."""
+        """Cast input string to original data type."""
         try:
-            if isinstance(original, int):
-                return int(new_value_str)
-            if isinstance(original, float):
-                return float(new_value_str)
-            if isinstance(original, bool):
-                return new_value_str.lower() in ("1", "true", "yes", "y")
-            if isinstance(original, list):
-                return new_value_str.split(',')
-        except Exception as e:
-            print(e)
+            if isinstance(original, int): return int(new_value_str)
+            if isinstance(original, bool): return new_value_str.lower() in ("1", "true", "yes", "y")
+        except: return new_value_str
         return new_value_str
 
     @staticmethod
     def edit_fields(structure: dict):
-        """Generic editing for any dict-like header."""
+        """Display and edit dictionary fields."""
         print("\nAvailable fields:")
-        for key in structure.keys():
-            print("  -", key)
-
-        field = input("\nWhich key you want to change? ")
-        if field not in structure:
-            print("Invalid key!")
-            return
-
-        new_value_str = input(f"What value do you want to put in '{field}'? ")
-
-        original = structure[field]
-        structure[field] = Builder.cast_value(original, new_value_str)
+        for key, value in structure.items():
+            print(f"  - {key}: {value}")
+        field = input("\nWhich key to change (or Enter to skip)? ")
+        if field in structure:
+            val = input(f"Enter new value for '{field}': ")
+            structure[field] = Builder.cast_value(structure[field], val)
 
     @staticmethod
-    def build(protocol: Protocol, is_raw=False):
-        registry = Registry()
+    def build(root_protocol: Protocol, start_layer: Protocol = None):
+        """Main loop to chain and edit protocols."""
+        current_layer = start_layer if start_layer is not None else root_protocol
 
-        # ---------------- RAW IPv4 MODE ----------------
-        if is_raw and protocol.name == "IPv4":
+        if start_layer is None and hasattr(current_layer, 'setup'):
+            current_layer.setup()
 
-            is_payload = input("Do you want to add additional payload? (y/n) ")
-            if is_payload != "y":
-                return
+        while True:
+            print(f"\n--- Editing Layer: {current_layer.name} ---")
+            all_sub_dicts = {k: v for k, v in vars(current_layer).items() if isinstance(v, dict)}
 
-            another_protocol = input(
-                "Which protocol you want to add?\nICMP\nUDP\n"
-            )
+            if all_sub_dicts:
+                print("Parts:", list(all_sub_dicts.keys()))
+                part = input("Which part to edit? ")
+                if part in all_sub_dicts:
+                    Builder.edit_fields(all_sub_dicts[part])
 
-            # ---------------- ICMP ----------------
-            if another_protocol.upper() == "ICMP":
-                pkt = protocol.add_protocol(ICMP())
-                print(pkt)
+            add_payload = input(f"Add layer inside {current_layer.name}? (y/n) ")
+            if add_payload.lower() == 'y':
+                proto_name = input("Enter protocol name (e.g. UDP, IPv4): ")
+                new_layer = ProtocolFactory.create(proto_name)
+                if new_layer:
+                    current_layer.payload = new_layer
+                    current_layer = new_layer
+                    if hasattr(current_layer, 'setup'):
+                        current_layer.setup()
+                    continue
+            break
 
-                while True:
-                    edit = input("Change fields? (y/n) ")
-                    if edit != "y":
-                        break
+        if root_protocol.payload:
+            print(f"DEBUG: Payload {root_protocol.payload.name} is attached.")
 
-                    layer = input("Which layer? (ip/icmp) ")
-
-                    if layer == "ip":
-                        Builder.edit_fields(protocol.header)
-
-                    elif layer == "icmp":
-                        Builder.edit_fields(protocol.payload.header)
-
-                ans = Network.send_and_received(pkt)
-                print(ans)
-                return
-
-            # ---------------- UDP ----------------
-            if another_protocol.upper() == "UDP":
-
-                proto2 = input("Do you want to add DNS/NTP inside UDP? (y/n) ")
-                if proto2 != "y":
-                    return
-
-                deeper = input("Which protocol? (DNS/NTP) ")
-
-                # ---------------- DNS ----------------
-                if deeper.lower() == "dns":
-                    domain = input("Domain (example.com): ")
-                    pkt = protocol.add_protocol(
-                        UDP(dst_port=53).add_protocol(DNS(domain=domain))
-                    )
-                    print(pkt)
-
-                    while True:
-                        edit = input("Change fields? (y/n) ")
-                        if edit != "y":
-                            break
-
-                        layer = input("Which layer? (ip/udp/dns) ")
-
-                        if layer == "ip":
-                            Builder.edit_fields(protocol.header)
-
-                        elif layer == "udp":
-                            Builder.edit_fields(protocol.payload.header)
-
-                        elif layer == "dns":
-                            section = input("header or question? ")
-
-                            if section == "header":
-                                Builder.edit_fields(protocol.payload.payload.header)
-                            else:
-                                Builder.edit_fields(protocol.payload.payload.question_section)
-
-                    ans = Network.send_and_received(pkt)
-                    print(ans)
-                    return
-
-                # ---------------- NTP ----------------
-                if deeper.lower() == "ntp":
-
-                    pkt = protocol.add_protocol(
-                        UDP(dst_port=123).add_protocol(NTP())
-                    )
-                    print(pkt)
-
-                    while True:
-                        edit = input("Change fields? (y/n) ")
-                        if edit != "y":
-                            break
-
-                        layer = input("Which layer? (ip/udp/ntp) ")
-
-                        if layer == "ip":
-                            Builder.edit_fields(protocol.header)
-
-                        elif layer == "udp":
-                            Builder.edit_fields(protocol.payload.header)
-
-                        elif layer == "ntp":
-                            part = input("Which part? (header/reference_parameters/timestamps) ")
-
-                            if part == "header":
-                                Builder.edit_fields(protocol.payload.payload.header)
-
-                            elif part == "reference_parameters":
-                                Builder.edit_fields(protocol.payload.payload.reference_parameters)
-
-                            elif part == "timestamps":
-                                Builder.edit_fields(protocol.payload.payload.timestamps)
-
-                    ans = Network.send_and_received(pkt)
-                    print("Response:\n", ans)
-                    return
-
-        # ---------------- NON-RAW MODE ----------------
-        else:
-            if protocol.name == "DNS":
-                domain = input("Domain: ")
-                pkt = DNS(domain=domain)
-                ans = Network.send_and_received(pkt)
-                print("Response:\n", ans)
-
-            elif protocol.name == "NTP":
-                pkt = NTP()
-                ans = Network.send_and_received(pkt)
-                print("Response:\n", ans)
+        print("\nSending packet...")
+        ans = Network.send_and_received(root_protocol)
+        print("Response:\n", ans)

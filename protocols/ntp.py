@@ -2,7 +2,10 @@ import struct
 import time
 from protocols.protocol import Protocol
 
+
 class NTP(Protocol):
+    TYPE_ID = 123
+
     def __init__(self, **kwargs):
         super().__init__('NTP')
         mode = kwargs.get('mode', 3)
@@ -11,7 +14,7 @@ class NTP(Protocol):
             self.header = {
                 'LI': kwargs.get('LI', 0),
                 'VN': kwargs.get('VN', 4),
-                'mode': 3,
+                'mode': mode,
                 'stratum': kwargs.get('stratum', 0),
                 'poll': int(kwargs.get('poll', 4)),
                 'precision': kwargs.get('precision', -20)
@@ -136,26 +139,19 @@ class NTP(Protocol):
         seconds, fraction = struct.unpack('!II', data)
         return seconds + float(fraction) / 2**32
 
-    def ntp_pretty_print(self) -> str:
-        pretty_protocol: str = """"""
-        pretty_protocol += '<-----NTP----->\n'
-        pretty_protocol += "|\t<-----Header----->\n"
-        for key, value in self.header.items():
-            pretty_protocol += f"|\t|{key}: {value}\n"
-        pretty_protocol += "|\t<-----Header----->\n"
+    def __str__(self) -> str:
+        body = self.format_table(self.name, self.header)
 
-        pretty_protocol += "|\n\t<-----Reference Parameters----->\n"
-        for key, value in self.reference_parameters.items():
-            pretty_protocol += f"|\t|{key}: {value}\n"
-        pretty_protocol += "|\t<-----Reference Parameters----->\n"
+        if hasattr(self, 'reference_parameters'):
+            body += "\n" + self.format_table("NTP Reference Parameters", self.reference_parameters)
 
-        pretty_protocol += "|\n\t<-----Timestamps----->\n"
-        for key, value in self.timestamps.items():
-            pretty_protocol += f"|\t|{key}: {value}\n"
-        pretty_protocol += "|\t<-----Timestamps----->\n"
-        pretty_protocol += '<-----NTP----->'
-        return pretty_protocol
+        if hasattr(self, 'timestamps'):
+            body += "\n" + self.format_table("NTP Timestamps", self.timestamps)
 
-    def __str__(self):
-        return f"{self.ntp_pretty_print()}"
+        if self.payload:
+            body += "\n" + str(self.payload)
 
+        return body
+
+    def get_socket_info(self):
+        return socket.SOCK_DGRAM, (self.dst_ip, 123)

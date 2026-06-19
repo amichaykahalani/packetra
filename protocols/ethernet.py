@@ -1,65 +1,70 @@
-from protocols.protocol import Protocol
 import struct
-import uuid
+
+from protocols.protocol import Protocol
+
 
 class Ethernet(Protocol):
+    TYPE_ID = 3
+    BROADCAST_MAC = bytes([0xFF] * 6)
+    HEADER_LENGTH = 14  # dst (6) + src (6) + ethertype (2)
+
     def __init__(self, **kwargs):
         from network import Network
         super().__init__('Ethernet')
-        self.frame = {
-            'header' : {
-                'dst_mac_addr': kwargs.get('dst_mac_addr', bytes([0xFF] * 6)), #this is broadcast address
-                'src_mac_addr': kwargs.get('src_mac_addr', Network.get_my_mac('ens33')),
-                'type': kwargs.get('type', 0x0800)
-            },
-            'data': kwargs.get('data', b''),
-        }
+
+        self.header = {
+            'dst_mac_addr': kwargs.get('dst_mac_addr', self.BROADCAST_MAC),
+            'src_mac_addr': kwargs.get('src_mac_addr', Network.get_my_mac(Network.get_default_iface())),
+            'type': kwargs.get('type', 0x0806),
+            }
+
+        self.data = b'',
+        
 
         self.payload = None
 
-    def to_binary(self) -> bytes:
-        # header: dst MAC (6), src MAC (6), EtherType (2)
-        bin_frame = self.frame['header']['dst_mac_addr'] + self.frame['header']['src_mac_addr']
-        bin_frame += struct.pack('!H',self.frame['header']['type'])
+    def to_binary(self):
+        bin_frame = (
+            self.header["dst_mac_addr"] +
+            self.header["src_mac_addr"] +
+            struct.pack("!H", self.header["type"])
+        )
 
         if self.payload:
-            self.frame['data'] = self.payload.to_binary()
-            bin_frame += self.frame['data']
+            self.data = self.payload.to_binary()
 
-        return bin_frame
+        return bin_frame + self.data
 
     def deserializer(self, data: bytes):
-        if len(data) < 14:
+        if len(data) < self.HEADER_LENGTH:
             raise ValueError("Data too short for Ethernet header")
 
-        self.frame['header']['dst_mac_addr'] = list(data[:6])
-        self.frame['header']['src_mac_addr'] = list(data[6:12])
-        self.frame['header']['type'] = struct.unpack('!H', data[12:14])[0]
+        self.header["dst_mac_addr"] = data[:6]
+        self.header["src_mac_addr"] = data[6:12]
+        self.header["type"] = struct.unpack("!H", data[12:14])[0]
 
-        payload_data = data[14:]
+        self.data = data[self.HEADER_LENGTH:]
         self.frame['data'] = payload_data
-        self.payload = None
-
-        if self.frame['header']['type'] == 0x0806:
-            if len(payload_data) >= 28:
-                from protocols.arp import ARP
-                self.payload = ARP().deserializer(self.frame['data'])
+        self.payload = self._deserialize_payload(payload_data)
 
         return self
 
-    def __str__(self):
-        return self.ether_pretty_print()
+    def _deserialize_payload(self, payload_data: bytes):
+        ethertype = self.frame['header']['type']
 
-    def ether_pretty_print(self) -> str:
-        pretty_protocol: str = """"""
-        pretty_protocol += '<-----Ethernet----->\n'
-        pretty_protocol += "|\t<-----Frame----->\n"
-        for key, value in self.frame.items():
-            pretty_protocol += f"|\t|{key}: {value}\n"
-        pretty_protocol += "| \t<-----Frame----->\n|\n"
-        pretty_protocol += f"|\t{self.payload}"
-        pretty_protocol += "|\n<-----Ethernet----->\n"
-        return pretty_protocol
+        if ethertype == 0x0806 and len(payload_data) >= 28:  # ARP
+            from protocols.arp import ARP
+            return ARP().deserializer(payload_data)
+
+        return None
+
+    def get_socket_info(self):
+        """Ethernet frames require a raw L2 socket (AF_PACKET), not the
+        AF_INET raw sockets used by IPv4/ICMP. Network.send_and_received
+        currently only opens AF_INET sockets, so sending an Ethernet
+        frame as the root protocol will not work without changes there."""
+        import socket
+        return socket.SOCK_RAW, ("", 0)
 
     @staticmethod
     def mac_to_str(mac_bytes: bytes) -> str:

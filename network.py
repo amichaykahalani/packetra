@@ -1,13 +1,212 @@
-from protocols.ethernet import Ethernet
-from protocols.protocol import Protocol
 import socket
 import struct
 import fcntl
+from protocols.protocol import Protocol
+
 
 class Network:
+    """
+    Manages network communications.
+    This class is protocol-agnostic, using the Protocol object's
+    own socket requirements to handle data transmission.
+    """
 
-    def __init__(self):
-        self.packets = []
+    @staticmethod
+    def send_and_received(protocol: Protocol) -> Protocol:
+        """
+        Sends a hand-built packet and waits for a response.
+
+        Packets are sent via a raw IPPROTO_RAW socket (since we build our
+        own IP header). Raw send-only sockets aren't bound to anything
+        the kernel recognizes as a real listener, so the OS won't deliver
+        replies back to them — it'll send "ICMP port unreachable" instead.
+        To actually receive a reply, we open a second, separate socket
+        appropriate to the inner protocol (UDP or ICMP) just for listening.
+        """
+        try:
+            pkt = protocol.to_binary()
+
+            # Ethernet (and anything riding directly on it, like ARP) has
+            # no IP header at all, so it can't go through the AF_INET
+            # paths below -- it needs AF_PACKET bound to an interface.
+            # Dispatch on this before the generic SOCK_RAW check, since
+            # Ethernet.get_socket_info() also reports SOCK_RAW but means
+            # something different by it (L2 raw, not AF_INET IPPROTO_RAW).
+            if protocol.name == 'Ethernet':
+                return Network._send_ethernet_raw(protocol, pkt)
+
+            sock_type, dest_addr = protocol.get_socket_info()
+
+            if sock_type == socket.SOCK_RAW:
+                return Network._send_and_receive_raw(protocol, pkt, dest_addr)
+
+            sock = socket.socket(socket.AF_INET, sock_type)
+            sock.settimeout(10)
+            sock.sendto(pkt, dest_addr)
+            response, addr = sock.recvfrom(65535)
+            sock.close()
+            return protocol.deserializer(response)
+
+        except Exception as e:
+            print(f"Network error in send_and_received: {e}")
+            return protocol
+
+    @staticmethod
+    def _send_ethernet_raw(protocol: Protocol, pkt: bytes) -> Protocol:
+        """Send/receive raw Ethernet frames via AF_PACKET, bound to the
+        default interface. Used for ARP and any other link-layer
+        protocol that has no IP header above it.
+
+        AF_PACKET sockets bound to ETH_P_ALL-style ethertypes will also
+        see our own outgoing frame echoed back by the kernel on some
+        platforms, so we filter out anything whose source MAC matches
+        ours before treating a received frame as the reply.
+        """
+        iface = Network.get_default_iface()
+        ethertype = protocol.frame['header']['type']
+        our_mac = protocol.frame['header']['src_mac_addr']
+
+        send_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype))
+        send_sock.bind((iface, 0))
+
+        recv_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype))
+        recv_sock.bind((iface, 0))
+        recv_sock.settimeout(10)
+
+        try:
+            print(f"[DEBUG] Sending {len(pkt)} byte Ethernet frame on {iface}, ethertype {hex(ethertype)}")
+            send_sock.send(pkt)
+
+            while True:
+                response, addr = recv_sock.recvfrom(65535)
+                src_mac_in_frame = response[6:12]
+                if src_mac_in_frame == our_mac:
+                    continue  # our own outgoing frame looped back, not a real reply
+                return protocol.deserializer(response)
+
+        finally:
+            send_sock.close()
+            recv_sock.close()
+
+    @staticmethod
+    def _send_and_receive_raw(protocol: Protocol, pkt: bytes, dest_addr: tuple) -> Protocol:
+        """Handles the raw-send case, branching on what the inner protocol
+        actually is, since UDP and ICMP need different receive sockets."""
+        inner_protocol = getattr(protocol, 'payload', None)
+        inner_proto_id = protocol.header.get('protocol') if protocol.header else None
+
+        if inner_proto_id == 17 and inner_protocol is not None:  # UDP
+            return Network._send_udp_raw(protocol, pkt, dest_addr, inner_protocol)
+        elif inner_proto_id == 1:  # ICMP
+            return Network._send_icmp_raw(protocol, pkt, dest_addr)
+        else:
+            return Network._send_raw_only(protocol, pkt, dest_addr)
+
+    @staticmethod
+    def _send_udp_raw(protocol: Protocol, pkt: bytes, dest_addr: tuple, udp_layer) -> Protocol:
+        """Send via raw socket, receive via a normal UDP socket bound to
+        the same source port so the kernel has a real listener for the
+        reply (otherwise it bounces with ICMP port-unreachable)."""
+        src_port = udp_layer.header['src_port']
+
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+        send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        recv_sock.settimeout(10)
+        recv_sock.bind(('', src_port))
+
+        try:
+            print(f"[DEBUG] Sending {len(pkt)} bytes to {dest_addr}, listening on port {src_port}")
+            send_sock.sendto(pkt, dest_addr)
+            response, addr = recv_sock.recvfrom(65535)
+
+            if udp_layer.payload is not None:
+                udp_layer.payload = udp_layer.payload.deserializer(response)
+            else:
+                udp_layer = udp_layer.deserializer(response)
+
+            return protocol
+        finally:
+            send_sock.close()
+            recv_sock.close()
+
+    @staticmethod
+    def _send_icmp_raw(protocol: Protocol, pkt: bytes, dest_addr: tuple) -> Protocol:
+        """Send and receive both over raw ICMP sockets. ICMP has no ports,
+        so the kernel delivers any inbound ICMP traffic on this interface
+        to a raw ICMP socket without needing a bound port — we just have
+        to make sure the reply we read back is actually ours."""
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+        send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+        recv_sock.settimeout(10)
+
+        identifier = getattr(protocol.payload, 'header', {}).get('identifier')
+
+        try:
+            print(f"[DEBUG] Sending {len(pkt)} bytes to {dest_addr}")
+            send_sock.sendto(pkt, dest_addr)
+
+            while True:
+                response, addr = recv_sock.recvfrom(65535)
+                print(f"[DEBUG] full IP+ICMP response: {response.hex()}")
+                print(f"[DEBUG] response length: {len(response)}")
+                # response includes the IP header; ICMP type/code start at byte 20
+                if addr[0] != dest_addr[0]:
+                    continue
+                if identifier is not None and len(response) >= 26:
+                    resp_identifier = struct.unpack('!H', response[24:26])[0]
+                    if resp_identifier != identifier:
+                        continue
+                return protocol.deserializer(response)
+
+        finally:
+            send_sock.close()
+            recv_sock.close()
+
+    @staticmethod
+    def _send_raw_only(protocol: Protocol, pkt: bytes, dest_addr: tuple) -> Protocol:
+        """Fallback: send via raw socket with no dedicated receive
+        strategy (e.g. unsupported inner protocols). Will almost
+        certainly time out on the response, but won't crash."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+        sock.settimeout(10)
+        try:
+            sock.sendto(pkt, dest_addr)
+            response, addr = sock.recvfrom(65535)
+            return protocol.deserializer(response)
+        finally:
+            sock.close()
+
+    @staticmethod
+    def get_my_ip() -> str:
+        """Retrieves the local machine's IP address by connecting to a public DNS."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+        finally:
+            s.close()
+
+    @staticmethod
+    def convert_ip_into_bytes(ip: str) -> bytes:
+        """Converts a dotted-quad IP string to 4-byte format."""
+        return socket.inet_aton(ip)
+
+    @staticmethod
+    def convert_bytes_into_ip(ip: bytes) -> str:
+        """Converts 4-byte network IP format to a dotted-quad string."""
+        return socket.inet_ntop(socket.AF_INET, ip)
+
+    @staticmethod
+    def get_my_mac(iface: str) -> bytes:
+        """Uses IOCTL to retrieve the MAC address of a specific network interface."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', iface.encode('utf-8')))
+        return info[18:24]
 
     @staticmethod
     def get_ip(family, rdata):
@@ -16,137 +215,14 @@ class Network:
                 return socket.inet_ntop(socket.AF_INET, rdata)
             elif family == 'AF_INET6':
                 return socket.inet_ntop(socket.AF_INET6, rdata)
-
         except Exception as e:
             return e
 
     @staticmethod
-    def send_and_received(protocol: Protocol) -> Protocol:
-        from protocols.ipv4 import IPv4
-        from protocols.dns import DNS
-        from protocols.ntp import NTP
-        try:
-
-            if protocol.name == 'Ethernet':
-                pkt = protocol.to_binary()
-                response = Network.create_sock_and_send(pkt, protocol)
-                return Ethernet().deserializer(response)
-
-            elif protocol.name == 'IPv4':
-                pkt = protocol.to_binary()
-                response = Network.create_sock_and_send(pkt, protocol)
-                return IPv4().deserializer(response)
-
-            elif protocol.name == 'NTP':
-                pkt = protocol.to_binary()
-                response = Network.create_sock_and_send(pkt, protocol)
-                return NTP().deserializer(response)
-
-            elif protocol.name == 'DNS':
-                pkt = protocol.to_binary()
-                response = Network.create_sock_and_send(pkt, protocol)
-                return DNS('www.google.com', is_response=True).deserializer(response)
-
-
-            else:
-                print("something went wrong, protocol not supported")
-
-        except Exception as e:
-            print(e)
-
-        print("return protocol")
-        return protocol
-
-    @staticmethod
-    def create_sock_and_send(pkt, protocol):
-        pname = protocol.name
-        raw_socket_protocols = ['IPv4'] #I remove the udp from here.
-        af_packet_protocols = ['Ethernet', 'ARP']
-        is_raw = False
-        is_ether = False
-        if pname in af_packet_protocols:
-            is_ether = True
-
-        if pname in raw_socket_protocols:
-            is_raw = True
-
-        if is_ether:
-            if pname == 'Ethernet' and protocol.payload and protocol.payload.name == 'ARP':
-                ETH_P_ARP = 0x0806
-                sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(ETH_P_ARP))
-                sock.bind(('ens33', ETH_P_ARP))
-                sock.send(pkt)
-                while True:
-                    response, addr = sock.recvfrom(65535)
-                    eth_type = struct.unpack('!H', pkt[12:14])[0]
-
-                    if eth_type == ETH_P_ARP:
-                        return response
-
-        if is_raw:
-            if pname == 'IPv4':
-                try:
-                    if protocol.payload.name == 'ICMP':
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(10)
-                        sock.sendto(pkt, (protocol.header['dst_ip'], 0))
-
-                    elif protocol.payload.name == 'UDP' and protocol.payload.payload is None:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(10)
-                        sock.sendto(pkt, (protocol.header['dst_ip'], protocol.payload.header['dst_port']))
-
-                    elif protocol.payload.payload.name == 'DNS':
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(10)
-                        sock.sendto(pkt, ("8.8.8.8", 53))
-
-                    elif protocol.payload.payload.name == 'NTP':
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-                        sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-                        sock.settimeout(10)
-                        sock.sendto(pkt, ("129.159.140.221", 123))
-
-                except Exception as e:
-                    print(e)
-
-        elif pname == 'NTP':
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(pkt, ("129.159.140.221", 123))
-
-        elif pname == 'DNS':
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(pkt, ("8.8.8.8", 53))
-
-        response, addr = sock.recvfrom(4096)
-        sock.close()
-        return response
-
-
-    @staticmethod
-    def get_my_ip() -> str:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-        finally:
-            s.close()
-        return ip
-
-    @staticmethod
-    def convert_ip_into_bytes(ip: str) -> bytes:
-       return socket.inet_aton(ip)
-
-    @staticmethod
-    def convert_bytes_into_ip(ip: bytes) -> str:
-        return socket.inet_ntop(socket.AF_INET, ip)
-
-    @staticmethod
-    def get_my_mac(iface: str) -> bytes:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        info = fcntl.ioctl(sock.fileno(), 0x8927, struct.pack('256s', iface.encode('utf-8')))
-        mac = info[18:24]
-        return mac
+    def get_default_iface():
+        with open('/proc/net/route') as f:
+            for line in f.readlines()[1:]:
+                fields = line.strip().split()
+                if fields[1] == '00000000':  # default route
+                    return fields[0]
+        return 'eth0'  # fallback

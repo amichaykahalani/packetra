@@ -1,6 +1,5 @@
 from protocols.udp import UDP
 from protocols.ipv4 import IPv4
-from protocols.dns import DNS
 from protocols.ntp import NTP
 from network import Network
 from protocols.ethernet import Ethernet
