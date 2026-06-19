@@ -66,6 +66,7 @@ class Ethernet(Protocol):
         import socket
         return socket.SOCK_RAW, ("", 0)
 
+
     @staticmethod
     def mac_to_str(mac_bytes: bytes) -> str:
         return ':'.join(f'{b:02x}' for b in mac_bytes)
