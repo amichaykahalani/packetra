@@ -10,6 +10,7 @@ Every packet is hand-built from raw bytes using `struct` and raw sockets — the
 
 - **Linux only.** Packetra relies on `AF_PACKET` sockets for Ethernet/ARP, `IPPROTO_RAW`/`IP_HDRINCL` for raw IP construction, `/proc/net/route` for interface detection, and `fcntl`/`ioctl` for MAC address lookups — all Linux-specific. It will not run as-is on macOS or Windows.
 - **Root / `CAP_NET_RAW`.** Raw socket creation requires elevated privileges. Run with `sudo`, or grant the capability directly:
+  
   ```bash
   sudo setcap cap_net_raw+ep $(which python3)
   ```
