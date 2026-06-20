@@ -1,6 +1,7 @@
 from attacks import Attack
 from builder import Builder
 from protocols.protocol import Protocol
+from style import Style
 
 
 class Menu:
@@ -11,20 +12,20 @@ class Menu:
     def _prompt_choice(options: dict, title: str) -> int:
         """Print a numbered menu, keep asking until a valid choice is entered."""
         while True:
-            print(f"\n{title}")
+            print(Style.title(title))
             for key, value in options.items():
                 label = value.__name__ if callable(value) else value
-                print(f"  {key}. {label}")
+                print(Style.option(key, label))
 
-            raw = input("\n> ").strip()
+            raw = input(f"\n{Style.prompt('')}").strip()
 
             if not raw.isdigit():
-                print("Please enter a number.")
+                print(Style.error("Please enter a number."))
                 continue
 
             choice = int(raw)
             if choice not in options:
-                print("Invalid option, try again.")
+                print(Style.error("Invalid option, try again."))
                 continue
 
             return choice
@@ -39,7 +40,7 @@ class Menu:
         }
 
         while True:
-            choice = Menu._prompt_choice(main_options, "Welcome to Packetra! What would you like to do?")
+            choice = Menu._prompt_choice(main_options, "Welcome to Packetra!")
 
             if choice == 1:
                 Menu._run_dos_attack()
@@ -48,7 +49,7 @@ class Menu:
             elif choice == 3:
                 Menu._run_packet_builder()
             elif choice == 4:
-                print("Goodbye!")
+                print(Style.success("\nGoodbye!"))
                 break
 
     @staticmethod
@@ -59,7 +60,9 @@ class Menu:
             3: Attack.dns_amplification,
             4: Attack.ntp_amplification,
         }
-        choice = Menu._prompt_choice(dos_options, "Which DoS attack would you like to run?")
+        choice = Menu._prompt_choice(
+            dos_options, "Which DoS attack would you like to run?"
+        )
         dos_options[choice]()
 
     @staticmethod
@@ -67,7 +70,9 @@ class Menu:
         mitm_options = {
             1: Attack.arp_spoofing,
         }
-        choice = Menu._prompt_choice(mitm_options, "Which MITM attack would you like to run?")
+        choice = Menu._prompt_choice(
+            mitm_options, "Which MITM attack would you like to run?"
+        )
         mitm_options[choice]()
 
     @staticmethod
@@ -75,11 +80,11 @@ class Menu:
         registry = Protocol.registry
         choice = Menu._prompt_choice(
             {key: cls.__name__ for key, cls in registry.items()},
-            "What packet would you like to craft?"
+            "What packet would you like to craft?",
         )
         protocol_cls = registry[choice]
 
-        NEEDS_ETHERNET_WRAPPER = {2054}
+        NEEDS_ETHERNET_WRAPPER = {2054}  # ARP
 
         # Protocols that ride directly inside IPv4 and aren't independently
         # routable — wrap them automatically so the user doesn't have to
@@ -94,13 +99,12 @@ class Menu:
         NEEDS_IPV4_UDP_WRAPPER = {53: 53, 123: 123}  # DNS, NTP
 
         if choice in NEEDS_ETHERNET_WRAPPER:
-            ethernet = registry[3]()
+            ethernet = registry[3]()  # Ethernet's TYPE_ID
             ethernet.setup()
             inner = protocol_cls()
             ethernet.payload = inner
             protocol = ethernet
             current_layer = inner
-
         elif choice in NEEDS_IPV4_WRAPPER:
             ipv4 = registry[2048]()  # IPv4's TYPE_ID
             ipv4.setup()
@@ -112,7 +116,7 @@ class Menu:
             ipv4 = registry[2048]()  # IPv4's TYPE_ID
             ipv4.setup()
             udp = registry[17]()  # UDP's TYPE_ID
-            udp.header['dst_port'] = NEEDS_IPV4_UDP_WRAPPER[choice]
+            udp.header["dst_port"] = NEEDS_IPV4_UDP_WRAPPER[choice]
             inner = protocol_cls()
             udp.payload = inner
             ipv4.payload = udp
@@ -122,7 +126,7 @@ class Menu:
             protocol = protocol_cls()
             current_layer = protocol
 
-        if hasattr(current_layer, 'setup'):
+        if hasattr(current_layer, "setup"):
             current_layer.setup()
 
         Builder.build(protocol, start_layer=current_layer)

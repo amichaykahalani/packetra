@@ -12,6 +12,49 @@ class Network:
     """
 
     @staticmethod
+    def send_only(protocol: Protocol) -> None:
+        """Send a packet without waiting for or parsing a response.
+
+        Used for flood/injection scenarios where either no reply is
+        expected (spoofed amplification traffic goes to the spoofed
+        victim, not back to us) or where a reply genuinely isn't wanted
+        (e.g. repeated ARP spoofing replies). send_and_received() ends
+        by calling protocol.deserializer(response), which overwrites the
+        packet's own fields with whatever came back -- fine for a single
+        request/response exchange, but it silently destroys a spoofed
+        src_ip/MAC if the same object is reused across a loop. This
+        avoids that entirely by never deserializing anything back into
+        the packet.
+        """
+        pkt = protocol.to_binary()
+
+        if protocol.name == "Ethernet":
+            iface = Network.get_default_iface()
+            ethertype = protocol.frame["header"]["type"]
+            sock = socket.socket(
+                socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype)
+            )
+            sock.bind((iface, 0))
+            try:
+                sock.send(pkt)
+            finally:
+                sock.close()
+            return
+
+        sock_type, dest_addr = protocol.get_socket_info()
+
+        if sock_type == socket.SOCK_RAW:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+        else:
+            sock = socket.socket(socket.AF_INET, sock_type)
+
+        try:
+            sock.sendto(pkt, dest_addr)
+        finally:
+            sock.close()
+
+    @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
         """
         Sends a hand-built packet and waits for a response.
@@ -32,7 +75,7 @@ class Network:
             # Dispatch on this before the generic SOCK_RAW check, since
             # Ethernet.get_socket_info() also reports SOCK_RAW but means
             # something different by it (L2 raw, not AF_INET IPPROTO_RAW).
-            if protocol.name == 'Ethernet':
+            if protocol.name == "Ethernet":
                 return Network._send_ethernet_raw(protocol, pkt)
 
             sock_type, dest_addr = protocol.get_socket_info()
@@ -63,18 +106,21 @@ class Network:
         ours before treating a received frame as the reply.
         """
         iface = Network.get_default_iface()
-        ethertype = protocol.header['type']
-        our_mac = protocol.header['src_mac_addr']
+        ethertype = protocol.header["type"]
+        our_mac = protocol.header["src_mac_addr"]
 
-        send_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype))
+        send_sock = socket.socket(
+            socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype)
+        )
         send_sock.bind((iface, 0))
 
-        recv_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype))
+        recv_sock = socket.socket(
+            socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ethertype)
+        )
         recv_sock.bind((iface, 0))
         recv_sock.settimeout(10)
 
         try:
-            print(f"[DEBUG] Sending {len(pkt)} byte Ethernet frame on {iface}, ethertype {hex(ethertype)}")
             send_sock.send(pkt)
 
             while True:
@@ -89,11 +135,13 @@ class Network:
             recv_sock.close()
 
     @staticmethod
-    def _send_and_receive_raw(protocol: Protocol, pkt: bytes, dest_addr: tuple) -> Protocol:
+    def _send_and_receive_raw(
+        protocol: Protocol, pkt: bytes, dest_addr: tuple
+    ) -> Protocol:
         """Handles the raw-send case, branching on what the inner protocol
         actually is, since UDP and ICMP need different receive sockets."""
-        inner_protocol = getattr(protocol, 'payload', None)
-        inner_proto_id = protocol.header.get('protocol') if protocol.header else None
+        inner_protocol = getattr(protocol, "payload", None)
+        inner_proto_id = protocol.header.get("protocol") if protocol.header else None
 
         if inner_proto_id == 17 and inner_protocol is not None:  # UDP
             return Network._send_udp_raw(protocol, pkt, dest_addr, inner_protocol)
@@ -103,21 +151,22 @@ class Network:
             return Network._send_raw_only(protocol, pkt, dest_addr)
 
     @staticmethod
-    def _send_udp_raw(protocol: Protocol, pkt: bytes, dest_addr: tuple, udp_layer) -> Protocol:
+    def _send_udp_raw(
+        protocol: Protocol, pkt: bytes, dest_addr: tuple, udp_layer
+    ) -> Protocol:
         """Send via raw socket, receive via a normal UDP socket bound to
         the same source port so the kernel has a real listener for the
         reply (otherwise it bounces with ICMP port-unreachable)."""
-        src_port = udp_layer.header['src_port']
+        src_port = udp_layer.header["src_port"]
 
         send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
         send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
         recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         recv_sock.settimeout(10)
-        recv_sock.bind(('', src_port))
+        recv_sock.bind(("", src_port))
 
         try:
-            print(f"[DEBUG] Sending {len(pkt)} bytes to {dest_addr}, listening on port {src_port}")
             send_sock.sendto(pkt, dest_addr)
             response, addr = recv_sock.recvfrom(65535)
 
@@ -143,21 +192,18 @@ class Network:
         recv_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         recv_sock.settimeout(10)
 
-        identifier = getattr(protocol.payload, 'header', {}).get('identifier')
+        identifier = getattr(protocol.payload, "header", {}).get("identifier")
 
         try:
-            print(f"[DEBUG] Sending {len(pkt)} bytes to {dest_addr}")
             send_sock.sendto(pkt, dest_addr)
 
             while True:
                 response, addr = recv_sock.recvfrom(65535)
-                print(f"[DEBUG] full IP+ICMP response: {response.hex()}")
-                print(f"[DEBUG] response length: {len(response)}")
                 # response includes the IP header; ICMP type/code start at byte 20
                 if addr[0] != dest_addr[0]:
                     continue
                 if identifier is not None and len(response) >= 26:
-                    resp_identifier = struct.unpack('!H', response[24:26])[0]
+                    resp_identifier = struct.unpack("!H", response[24:26])[0]
                     if resp_identifier != identifier:
                         continue
                 return protocol.deserializer(response)
@@ -205,24 +251,26 @@ class Network:
     def get_my_mac(iface: str) -> bytes:
         """Uses IOCTL to retrieve the MAC address of a specific network interface."""
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', iface.encode('utf-8')))
+        info = fcntl.ioctl(
+            s.fileno(), 0x8927, struct.pack("256s", iface.encode("utf-8"))
+        )
         return info[18:24]
 
     @staticmethod
     def get_ip(family, rdata):
         try:
-            if family == 'AF_INET':
+            if family == "AF_INET":
                 return socket.inet_ntop(socket.AF_INET, rdata)
-            elif family == 'AF_INET6':
+            elif family == "AF_INET6":
                 return socket.inet_ntop(socket.AF_INET6, rdata)
         except Exception as e:
             return e
 
     @staticmethod
     def get_default_iface():
-        with open('/proc/net/route') as f:
+        with open("/proc/net/route") as f:
             for line in f.readlines()[1:]:
                 fields = line.strip().split()
-                if fields[1] == '00000000':  # default route
+                if fields[1] == "00000000":  # default route
                     return fields[0]
-        return 'eth0'  # fallback
+        return "eth0"  # fallback
