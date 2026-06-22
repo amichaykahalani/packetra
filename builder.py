@@ -19,9 +19,7 @@ class Builder:
 
     @staticmethod
     def _display_value(value):
-        """Render bytes more readably: 6-byte values as MAC-style
-        colon-hex, other byte strings as plain hex. Leaves everything
-        else untouched."""
+        """Format bytes for display: MAC if 6 bytes, hex otherwise."""
         if isinstance(value, bytes):
             if len(value) == 6:
                 return ":".join(f"{b:02x}" for b in value)
@@ -30,9 +28,7 @@ class Builder:
 
     @staticmethod
     def edit_fields(structure: dict):
-        """Display and edit dictionary fields. Loops until the user is
-        done editing this part, so multiple fields can be changed in
-        one visit instead of just one."""
+        """Display and edit dictionary fields interactively."""
         while True:
             print(Style.section("Available fields"))
             for key, value in structure.items():
@@ -66,9 +62,6 @@ class Builder:
                 k: v for k, v in vars(current_layer).items() if isinstance(v, dict)
             }
 
-            # Loop here so the user can edit as many parts (and revisit
-            # the same part more than once) as they want before moving
-            # on, instead of being kicked to "Add layer?" after just one.
             while all_sub_dicts:
                 print(Style.section("Parts"))
                 for part_name in all_sub_dicts:

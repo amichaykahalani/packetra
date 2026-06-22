@@ -5,8 +5,6 @@ from style import Style
 
 
 class Menu:
-    def __init__(self):
-        pass
 
     @staticmethod
     def _prompt_choice(options: dict, title: str) -> int:
@@ -85,37 +83,27 @@ class Menu:
         protocol_cls = registry[choice]
 
         NEEDS_ETHERNET_WRAPPER = {2054}  # ARP
-
-        # Protocols that ride directly inside IPv4 and aren't independently
-        # routable — wrap them automatically so the user doesn't have to
-        # build IPv4 by hand first just to send a ping or a UDP packet.
         NEEDS_IPV4_WRAPPER = {1, 17}  # ICMP, UDP
-
-        # Protocols that ride inside UDP (and therefore IPv4 -> UDP -> X),
-        # keyed by their TYPE_ID with the UDP destination port they need to
-        # be addressed to. UDP.deserializer() dispatches replies back to the
-        # right class via Protocol.registry[dst_port], so dst_port must match
-        # TYPE_ID for the round trip to work.
         NEEDS_IPV4_UDP_WRAPPER = {53: 53, 123: 123}  # DNS, NTP
 
         if choice in NEEDS_ETHERNET_WRAPPER:
-            ethernet = registry[3]()  # Ethernet's TYPE_ID
+            ethernet = registry[3]()
             ethernet.setup()
             inner = protocol_cls()
             ethernet.payload = inner
             protocol = ethernet
             current_layer = inner
         elif choice in NEEDS_IPV4_WRAPPER:
-            ipv4 = registry[2048]()  # IPv4's TYPE_ID
+            ipv4 = registry[2048]()
             ipv4.setup()
             inner = protocol_cls()
             ipv4.payload = inner
             protocol = ipv4
             current_layer = inner
         elif choice in NEEDS_IPV4_UDP_WRAPPER:
-            ipv4 = registry[2048]()  # IPv4's TYPE_ID
+            ipv4 = registry[2048]()
             ipv4.setup()
-            udp = registry[17]()  # UDP's TYPE_ID
+            udp = registry[17]()
             udp.header["dst_port"] = NEEDS_IPV4_UDP_WRAPPER[choice]
             inner = protocol_cls()
             udp.payload = inner

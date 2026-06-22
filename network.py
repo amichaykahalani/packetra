@@ -5,27 +5,11 @@ from protocols.protocol import Protocol
 
 
 class Network:
-    """
-    Manages network communications.
-    This class is protocol-agnostic, using the Protocol object's
-    own socket requirements to handle data transmission.
-    """
+    """Manages network communications, protocol-agnostic."""
 
     @staticmethod
     def send_only(protocol: Protocol) -> None:
-        """Send a packet without waiting for or parsing a response.
-
-        Used for flood/injection scenarios where either no reply is
-        expected (spoofed amplification traffic goes to the spoofed
-        victim, not back to us) or where a reply genuinely isn't wanted
-        (e.g. repeated ARP spoofing replies). send_and_received() ends
-        by calling protocol.deserializer(response), which overwrites the
-        packet's own fields with whatever came back -- fine for a single
-        request/response exchange, but it silently destroys a spoofed
-        src_ip/MAC if the same object is reused across a loop. This
-        avoids that entirely by never deserializing anything back into
-        the packet.
-        """
+        """Send a packet without waiting for a response."""
         pkt = protocol.to_binary()
 
         if protocol.name == "Ethernet":
@@ -56,25 +40,10 @@ class Network:
 
     @staticmethod
     def send_and_received(protocol: Protocol) -> Protocol:
-        """
-        Sends a hand-built packet and waits for a response.
-
-        Packets are sent via a raw IPPROTO_RAW socket (since we build our
-        own IP header). Raw send-only sockets aren't bound to anything
-        the kernel recognizes as a real listener, so the OS won't deliver
-        replies back to them — it'll send "ICMP port unreachable" instead.
-        To actually receive a reply, we open a second, separate socket
-        appropriate to the inner protocol (UDP or ICMP) just for listening.
-        """
+        """Send a hand-built packet and wait for a response."""
         try:
             pkt = protocol.to_binary()
 
-            # Ethernet (and anything riding directly on it, like ARP) has
-            # no IP header at all, so it can't go through the AF_INET
-            # paths below -- it needs AF_PACKET bound to an interface.
-            # Dispatch on this before the generic SOCK_RAW check, since
-            # Ethernet.get_socket_info() also reports SOCK_RAW but means
-            # something different by it (L2 raw, not AF_INET IPPROTO_RAW).
             if protocol.name == "Ethernet":
                 return Network._send_ethernet_raw(protocol, pkt)
 
@@ -96,15 +65,7 @@ class Network:
 
     @staticmethod
     def _send_ethernet_raw(protocol: Protocol, pkt: bytes) -> Protocol:
-        """Send/receive raw Ethernet frames via AF_PACKET, bound to the
-        default interface. Used for ARP and any other link-layer
-        protocol that has no IP header above it.
-
-        AF_PACKET sockets bound to ETH_P_ALL-style ethertypes will also
-        see our own outgoing frame echoed back by the kernel on some
-        platforms, so we filter out anything whose source MAC matches
-        ours before treating a received frame as the reply.
-        """
+        """Send/receive raw Ethernet frames via AF_PACKET."""
         iface = Network.get_default_iface()
         ethertype = protocol.header["type"]
         our_mac = protocol.header["src_mac_addr"]
@@ -127,7 +88,7 @@ class Network:
                 response, addr = recv_sock.recvfrom(65535)
                 src_mac_in_frame = response[6:12]
                 if src_mac_in_frame == our_mac:
-                    continue  # our own outgoing frame looped back, not a real reply
+                    continue  # loopback, skip
                 return protocol.deserializer(response)
 
         finally:
@@ -138,8 +99,7 @@ class Network:
     def _send_and_receive_raw(
         protocol: Protocol, pkt: bytes, dest_addr: tuple
     ) -> Protocol:
-        """Handles the raw-send case, branching on what the inner protocol
-        actually is, since UDP and ICMP need different receive sockets."""
+        """Branch by inner protocol to pick the right receive strategy."""
         inner_protocol = getattr(protocol, "payload", None)
         inner_proto_id = protocol.header.get("protocol") if protocol.header else None
 
@@ -154,9 +114,7 @@ class Network:
     def _send_udp_raw(
         protocol: Protocol, pkt: bytes, dest_addr: tuple, udp_layer
     ) -> Protocol:
-        """Send via raw socket, receive via a normal UDP socket bound to
-        the same source port so the kernel has a real listener for the
-        reply (otherwise it bounces with ICMP port-unreachable)."""
+        """Send via raw socket, receive via UDP socket bound to src_port."""
         src_port = udp_layer.header["src_port"]
 
         send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
@@ -182,10 +140,7 @@ class Network:
 
     @staticmethod
     def _send_icmp_raw(protocol: Protocol, pkt: bytes, dest_addr: tuple) -> Protocol:
-        """Send and receive both over raw ICMP sockets. ICMP has no ports,
-        so the kernel delivers any inbound ICMP traffic on this interface
-        to a raw ICMP socket without needing a bound port — we just have
-        to make sure the reply we read back is actually ours."""
+        """Send and receive over raw ICMP sockets, filtering by identifier."""
         send_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
         send_sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
@@ -199,7 +154,6 @@ class Network:
 
             while True:
                 response, addr = recv_sock.recvfrom(65535)
-                # response includes the IP header; ICMP type/code start at byte 20
                 if addr[0] != dest_addr[0]:
                     continue
                 if identifier is not None and len(response) >= 26:
@@ -214,9 +168,7 @@ class Network:
 
     @staticmethod
     def _send_raw_only(protocol: Protocol, pkt: bytes, dest_addr: tuple) -> Protocol:
-        """Fallback: send via raw socket with no dedicated receive
-        strategy (e.g. unsupported inner protocols). Will almost
-        certainly time out on the response, but won't crash."""
+        """Fallback for unsupported inner protocols."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
         sock.settimeout(10)
@@ -229,7 +181,7 @@ class Network:
 
     @staticmethod
     def get_my_ip() -> str:
-        """Retrieves the local machine's IP address by connecting to a public DNS."""
+        """Get local IP by connecting to a public DNS."""
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.connect(("8.8.8.8", 80))
@@ -239,17 +191,17 @@ class Network:
 
     @staticmethod
     def convert_ip_into_bytes(ip: str) -> bytes:
-        """Converts a dotted-quad IP string to 4-byte format."""
+        """Convert dotted-quad IP string to 4 bytes."""
         return socket.inet_aton(ip)
 
     @staticmethod
     def convert_bytes_into_ip(ip: bytes) -> str:
-        """Converts 4-byte network IP format to a dotted-quad string."""
+        """Convert 4-byte network IP to dotted-quad string."""
         return socket.inet_ntop(socket.AF_INET, ip)
 
     @staticmethod
     def get_my_mac(iface: str) -> bytes:
-        """Uses IOCTL to retrieve the MAC address of a specific network interface."""
+        """Get MAC address of a network interface via ioctl."""
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         info = fcntl.ioctl(
             s.fileno(), 0x8927, struct.pack("256s", iface.encode("utf-8"))

@@ -1,8 +1,4 @@
 class Style:
-    """Minimal ANSI styling helpers. No external dependencies -- just
-    escape codes, which any modern terminal understands. Centralized
-    here so menu.py and builder.py render consistently."""
-
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"

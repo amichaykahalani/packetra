@@ -2,7 +2,6 @@ import logging
 import random
 import socket
 import struct
-from pprint import pprint
 
 from protocols.protocol import Protocol
 
@@ -15,7 +14,7 @@ class DNS(Protocol):
     RECORD_TYPES = {"IPv4": 1, "Name Server": 2, "IPv6": 28, "ANY": 255}
     RECORD_CLASSES = {"IN": 1}
 
-    # rdata handlers for deserializing answer records, keyed by TYPE
+    # keyed by answer TYPE, used in _decode_rdata
     ANSWER_TYPE_A = 1
     ANSWER_TYPE_CNAME = 5
     ANSWER_TYPE_NS = 6
@@ -49,9 +48,8 @@ class DNS(Protocol):
 
     @property
     def all_sections(self) -> dict:
-        """Combined view of every section, always reflecting current state
-        (previously this was a one-time snapshot taken in __init__ that
-        went stale after setup() or Builder.edit_fields() mutated a section)."""
+        # built fresh each call so it never goes stale after setup() or
+        # Builder.edit_fields() mutates a section
         return self.header | self.question_section | self.answer_section
 
     def setup(self):
@@ -140,7 +138,7 @@ class DNS(Protocol):
 
     @staticmethod
     def _parse_answer_name(packet: bytes, offset: int) -> tuple[str, int]:
-        """Handles both a direct name and a compression pointer (0xC0xx)."""
+        # handles both a direct name and a compression pointer (0xC0xx)
         raw = struct.unpack("!H", packet[offset : offset + 2])[0]
 
         if raw & 0xC000 == 0xC000:
@@ -223,12 +221,6 @@ class DNS(Protocol):
             parts.append(self.format_table("Answer Section", self.answer_section))
         return "\n".join(parts)
 
-        def _text_sections(self) -> dict:
-            result = {"Header": self.header, "Question": self.question_section}
-            if self.is_response and self.answer_section:
-                result["Answer"] = self.answer_section
-            return result
-
     def _binary_sections(self) -> dict:
         result = {
             "Header": {
@@ -260,7 +252,5 @@ class DNS(Protocol):
         return result
 
     def get_socket_info(self):
-        """Only relevant if DNS is ever used standalone (not wrapped in
-        UDP/IPv4). When nested, IPv4.get_socket_info() handles the
-        actual raw socket instead."""
+        # only matters standalone — nested under UDP/IPv4, IPv4 handles the raw socket
         return socket.SOCK_DGRAM, ("8.8.8.8", 53)

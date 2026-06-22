@@ -6,17 +6,15 @@ from protocols.protocol import Protocol
 class Ethernet(Protocol):
     TYPE_ID = 3
     BROADCAST_MAC = bytes([0xFF] * 6)
-    HEADER_LENGTH = 14  # dst (6) + src (6) + ethertype (2)
+    HEADER_LENGTH = 14
 
     def __init__(self, **kwargs):
         from network import Network
 
         super().__init__("Ethernet")
 
-        # Track whether the caller explicitly chose an ethertype. If not,
-        # to_binary() will derive it automatically from whatever protocol
-        # ends up attached as payload (IPv4, ARP, etc) instead of being
-        # hardcoded to any one value.
+        # if no type was given, to_binary() figures it out from whatever
+        # ends up attached as payload (IPv4, ARP, etc)
         self._type_explicit = "type" in kwargs
 
         self.header = {
@@ -24,9 +22,7 @@ class Ethernet(Protocol):
             "src_mac_addr": kwargs.get(
                 "src_mac_addr", Network.get_my_mac(Network.get_default_iface())
             ),
-            "type": kwargs.get(
-                "type", 0x0800
-            ),  # sensible default (IPv4); overridden below if not explicit
+            "type": kwargs.get("type", 0x0800),
         }
 
         self.data = b""
@@ -81,8 +77,7 @@ class Ethernet(Protocol):
         self.header["type"] = struct.unpack("!H", data[12:14])[0]
 
         self.data = data[self.HEADER_LENGTH :]
-        payload_data = self.data
-        self.payload = self._deserialize_payload(payload_data)
+        self.payload = self._deserialize_payload(self.data)
 
         return self
 
@@ -97,11 +92,8 @@ class Ethernet(Protocol):
         return None
 
     def get_socket_info(self):
-        """Ethernet frames require a raw L2 socket (AF_PACKET), not the
-        AF_INET raw sockets used by IPv4/ICMP. Network.send_and_received
-        dispatches on protocol.name == 'Ethernet' before this is ever
-        consulted, so this stub is only here in case something calls it
-        directly."""
+        # needs AF_PACKET, not AF_INET — Network dispatches on name == 'Ethernet'
+        # before this ever gets called, this is just a fallback stub
         import socket
 
         return socket.SOCK_RAW, ("", 0)

@@ -12,16 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 class ProtocolFactory:
-    # Lookup is case-insensitive on the key; built once at class-definition
-    # time rather than rebuilt on every create() call.
+    # built once, lookup is case-insensitive
     _PROTOCOLS = {
-        'dns': DNS,
-        'ipv4': IPv4,
-        'udp': UDP,
-        'ntp': NTP,
-        'arp': ARP,
-        'ethernet': Ethernet,
-        'icmp': ICMP,
+        "dns": DNS,
+        "ipv4": IPv4,
+        "udp": UDP,
+        "ntp": NTP,
+        "arp": ARP,
+        "ethernet": Ethernet,
+        "icmp": ICMP,
     }
 
     @staticmethod
